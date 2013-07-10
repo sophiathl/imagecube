@@ -1,4 +1,4 @@
-Copyright (c) 2011, Astropy Developers
+Copyright (c) 2013, Jeff Taylor, Sophia Lianou, Pauline Barmby
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
