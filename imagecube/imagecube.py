@@ -258,7 +258,7 @@ def parse_command_line():
             sys.exit()
         elif opt in ("--ang_size"):
             ang_size = float(arg)
-        elif opt in ("--directory"):
+        elif opt in ("--dir"):
             directory = arg
             if (not os.path.isdir(directory)):
                 print("Error: The directory cannot be found: " + directory)
@@ -677,7 +677,20 @@ def cleanup_output_files():
             print("Removing " + subdir)
             shutil.rmtree(subdir)
 
-if __name__ == '__main__':
+#if __name__ == '__main__':
+def main(args=None):
+    global ang_size
+    global directory
+    global main_reference_image
+    global fwhm_input
+    global do_conversion
+    global do_registration
+    global do_convolution
+    global do_resampling
+    global do_seds
+    global do_cleanup
+    global use_kernels
+    global im_pixsc
     ang_size = ''
     directory = ''
     main_reference_image = ''
@@ -701,6 +714,13 @@ if __name__ == '__main__':
     all_files = glob.glob(directory + "/*.fit*")
 
     # Lists to store information
+    global image_data
+    global converted_data
+    global registered_data
+    global convolved_data
+    global resampled_data
+    global headers
+    global filenames
     image_data = []
     converted_data = []
     registered_data = []
