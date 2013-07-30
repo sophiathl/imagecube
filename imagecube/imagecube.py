@@ -493,8 +493,21 @@ def convolve_images(images_with_headers):
         # Otherwise, we convolve with a Gaussian kernel.
         kernel_filename = original_directory + "/kernels/" + original_filename + "_kernel.fits"
         print("Looking for " + kernel_filename)
+
         if use_kernels and os.path.exists(kernel_filename):
+
             print("Found a kernel; will convolve with it shortly.")
+            #reading the science image:
+            science_image = fits.getdata(input_filename)
+            print("Science image shape: " + `science_image.shape`)
+            # reading the kernel
+            kernel_image = fits.getdata(kernel_filename)
+            print("Kernel image shape: " + `kernel_image.shape`)
+
+            convolved_image = convolve(science_image, kernel_image, normalize_kernel=True)
+            print("Convolved image shape: " + `convolved_image.shape`)
+            fits.writeto(convolved_filename, convolved_image, clobber=True)
+
         else:
             native_pixelscale = u.deg.to(u.arcsec, abs(float(images_with_headers[i][1]['CDELT1'])))
             sigma_input = fwhm_input / (2* math.sqrt(2*math.log (2) ) * native_pixelscale)
