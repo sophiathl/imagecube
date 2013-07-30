@@ -12,27 +12,23 @@
 
 from __future__ import print_function, division
 
-import montage_wrapper as montage
-
 import sys
 import getopt
-
 import glob
-
 import math
-
 import os
 
-from astropy.io import fits
-from astropy.nddata import make_kernel, convolve
 from astropy import units as u
 from astropy import constants
-import numpy as np
-
-import scipy, pylab
-from matplotlib import rc
-
+from astropy.io import fits
+from astropy.nddata import make_kernel, convolve
 import astropy.utils.console as console
+import montage_wrapper as montage
+
+import numpy as np
+import scipy
+import pylab
+from matplotlib import rc
 
 NYQUIST_SAMPLING_RATE = 3.3
 """
