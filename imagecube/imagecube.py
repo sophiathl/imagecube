@@ -21,7 +21,7 @@ import os
 from astropy import units as u
 from astropy import constants
 from astropy.io import fits
-from astropy.nddata import make_kernel, convolve
+from astropy.nddata import make_kernel, convolve, convolve_fft
 import astropy.utils.console as console
 import montage_wrapper as montage
 
@@ -158,7 +158,8 @@ def print_usage():
     print("""
 Usage: """ + sys.argv[0] + """ --dir <directory> --ang_size <angular_size>
 [--flux_conv] [--im_reg] [--im_ref <filename>] [--im_conv]
-[--fwhm <fwhm value>] [--kernels] [--im_regrid] [--im_pixsc <number in arcsec>][--seds] [--cleanup] [--help]  
+[--fwhm <fwhm value>] [--kernels] [--im_regrid] [--im_pixsc <number in arcsec>]
+[--seds] [--cleanup] [--help]  
 
 dir: the path to the directory containing the <input FITS files> to be 
 processed
@@ -505,16 +506,21 @@ def convolve_images(images_with_headers):
 
             print("Found a kernel; will convolve with it shortly.")
             #reading the science image:
-            science_image = fits.getdata(input_filename)
-            print("Science image shape: " + `science_image.shape`)
+            #science_image = fits.getdata(input_filename)
+            science_hdulist = fits.open(input_filename)
+            science_header = science_hdulist[0].header
+            science_image = science_hdulist[0].data
+            science_hdulist.close()
             # reading the kernel
-            kernel_image = fits.getdata(kernel_filename)
-            print("Kernel image shape: " + `kernel_image.shape`)
+            #kernel_image = fits.getdata(kernel_filename)
+            kernel_hdulist = fits.open(kernel_filename)
+            kernel_image = kernel_hdulist[0].data
+            kernel_hdulist.close()
 
-            convolved_image = convolve(science_image, kernel_image, 
-                                       normalize_kernel=True)
-            print("Convolved image shape: " + `convolved_image.shape`)
-            fits.writeto(convolved_filename, convolved_image, clobber=True)
+            convolved_image = convolve_fft(science_image, kernel_image)
+            hdu = fits.PrimaryHDU(convolved_image, science_header)
+            hdu.writeto(convolved_filename, clobber=True)
+            #fits.writeto(convolved_filename, convolved_image, clobber=True)
 
         else:
             native_pixelscale = u.deg.to(
@@ -580,8 +586,7 @@ def create_data_cube(images_with_headers):
         resampled_images.append(image)
         hdulist.close()
 
-    fits.writeto(new_directory + '/' + 'datacube.fits', 
-                 np.copy(resampled_images), resampled_headers[0], clobber=True)
+    fits.writeto(new_directory + '/' + 'datacube.fits', np.copy(resampled_images), resampled_headers[0], clobber=True)
 
 def resample_images(images_with_headers):
     """
