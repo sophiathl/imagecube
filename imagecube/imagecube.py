@@ -314,31 +314,6 @@ def parse_command_line():
                   " could not be found in the directory " + directory)
             sys.exit()
 
-def check_ref_image_pixel_scale(ang_size, main_reference_image):
-    """
-    Compares the pixel scale of the reference image to the angular size
-    provided by the user. If the former is smaller than the latter, an
-    error message is displayed and the script exits.
-
-    Parameters
-    ----------
-    ang_size: float
-        The angular size provided by the user with the ang_size parameter.
-
-    main_reference_image: name of a FITS file
-        The reference image provided by the user with the im_ref parameter.
-    """
-    pixelscale = u.deg.to(
-        u.arcsec, abs(float(fits.getval(main_reference_image, 'CDELT1')))
-    )
-    print("Comparing " + `pixelscale` + " to " + `ang_size`)
-
-    if (ang_size < pixelscale):
-        print("Angular size is smaller than pixel scale of reference image.")
-        print("Please check your parameters and try again.")
-        sys.exit()
-
-
 def get_conversion_factor(header, instrument):
     """
     Returns the factor that is necessary to convert an image's native "flux 
@@ -788,8 +763,6 @@ def main(args=None):
         cleanup_output_files()
         sys.exit()
 
-    check_ref_image_pixel_scale(ang_size, main_reference_image)
-
     # Grab all of the .fits and .fit files in the specified directory
     all_files = glob.glob(directory + "/*.fit*")
 
@@ -827,11 +800,17 @@ def main(args=None):
         # things to it later on
         filename = os.path.splitext(hdulist.filename())[0]
         hdulist.close()
-        wavelength = header['WAVELNTH']
-        header['WAVELNTH'] = (wavelength, 'micron')
-        image_data.append(image)
-        headers.append(header)
-        filenames.append(filename)
+        pixelscale = u.deg.to(u.arcsec, abs(float(header['CDELT1'])))
+        fov = u.deg.to(u.arcsec, abs(float(header['CDELT1']))) * float(header['NAXIS1'])
+        print("Checking: " + `pixelscale` + " < " + `ang_size` + " < " + `fov`)
+        if (pixelscale < ang_size < fov):
+            wavelength = header['WAVELNTH']
+            header['WAVELNTH'] = (wavelength, 'micron')
+            image_data.append(image)
+            headers.append(header)
+            filenames.append(filename)
+        else:
+            print(filename + " does not meet the above criteria.")
 
     # Sort the lists by their WAVELNTH value
     images_with_headers_unsorted = zip(image_data, headers, filenames)
