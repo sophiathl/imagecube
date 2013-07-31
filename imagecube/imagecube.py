@@ -258,13 +258,13 @@ def parse_command_line():
     global do_cleanup
     global main_reference_image
     global fwhm_input
-    global use_kernels
+    global kernel_directory
     global im_pixsc
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], "", ["dir=", "ang_size=",
                                    "flux_conv", "im_conv", "im_reg", "im_ref=",
-                                   "im_conv", "fwhm=", "kernels", "im_pixsc=",
+                                   "im_conv", "fwhm=", "kernels=", "im_pixsc=",
                                    "im_regrid", "seds", "cleanup", "help"])
     except getopt.GetoptError:
         print("An error occurred. Check your parameters and try again.")
@@ -297,7 +297,11 @@ def parse_command_line():
         elif opt in ("--fwhm"):
             fwhm_input = float(arg)
         elif opt in ("--kernels"):
-            use_kernels = True
+            kernel_directory = arg
+            if (not os.path.isdir(kernel_directory)):
+                print("Error: The directory cannot be found: " + 
+                      kernel_directory)
+                sys.exit()
         elif opt in ("--im_pixsc"):
             im_pixsc = float(arg)
 
@@ -523,11 +527,12 @@ def convolve_images(images_with_headers):
         # Check if there is a corresponding PSF kernel.
         # If so, then use that to perform the convolution.
         # Otherwise, we convolve with a Gaussian kernel.
-        kernel_filename = (original_directory + "/kernels/" + original_filename
-                           + "_kernel.fits")
+        kernel_filename = (original_directory + "/" + kernel_directory + "/" + 
+                           original_filename + "_kernel.fits")
         print("Looking for " + kernel_filename)
 
-        if use_kernels and os.path.exists(kernel_filename):
+        #if use_kernels and os.path.exists(kernel_filename):
+        if os.path.exists(kernel_filename):
 
             print("Found a kernel; will convolve with it shortly.")
             #reading the science image:
@@ -761,7 +766,7 @@ def main(args=None):
     global do_resampling
     global do_seds
     global do_cleanup
-    global use_kernels
+    global kernel_directory
     global im_pixsc
     ang_size = ''
     directory = ''
@@ -773,7 +778,7 @@ def main(args=None):
     do_resampling = False
     do_seds = False
     do_cleanup = False
-    use_kernels = False
+    kernel_directory = ''
     im_pixsc = ''
 
     parse_command_line()
