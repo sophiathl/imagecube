@@ -158,8 +158,8 @@ def print_usage():
     print("""
 Usage: """ + sys.argv[0] + """ --dir <directory> --ang_size <angular_size>
 [--flux_conv] [--im_reg] [--im_ref <filename>] [--im_conv]
-[--fwhm <fwhm value>] [--kernels] [--im_regrid] [--im_pixsc <number in arcsec>]
-[--seds] [--cleanup] [--help]  
+[--fwhm <fwhm value>] [--kernels <kernel directory>] [--im_regrid] 
+[--im_pixsc <number in arcsec>] [--seds] [--cleanup] [--help]  
 
 dir: the path to the directory containing the <input FITS files> to be 
 processed
@@ -195,9 +195,10 @@ fwhm: the user provides the angular resolution in arcsec to which all images
 will be convolved with im_conv, if the Gaussian convolution is chosen, or if
 not all the input images have a corresponding kernel.
 
-kernels: the user provides kernel FITS images for each of the input images. If
-all input images do not have a corresponding kernel image, then the Gaussian
-convolution will be performed for these images.
+kernels: the user provides the name of a directory containing kernel FITS 
+images for each of the input images. If all input images do not have a 
+corresponding kernel image, then the Gaussian convolution will be performed for
+these images.
 
 im_regrid: it performs regridding of the convolved images to a common
 pixel scale. The pixel scale is defined by the im_pxsc parameter.
