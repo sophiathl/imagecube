@@ -166,25 +166,24 @@ Usage: """ + sys.argv[0] + """ --dir <directory> --ang_size <angular_size>
 dir: the path to the directory containing the <input FITS files> to be 
 processed
 
-ang_size: the angular size of the object in arcsec
+ang_size: the angular size of the output image cube in arcsec
 
-flux_conv: if flux units are not in Jy/pixel, this task will perform unit
-conversion to Jy/pixel.
+flux_conv: perform unit conversion to Jy/pixel for all images not already
+in these units.
 NOTE: If data are not GALEX, 2MASS, MIPS, IRAC, PACS, SPIRE, then the user
 should provide flux unit conversion factors to go from the image's native
 flux units to Jy/pixel. This information should be recorded in the header
 keyword FLUXCONV for each input image.
 
-im_reg: it performs the registration of the input images to the reference
-image. The user should provide the reference image with the im_ref 
-parameter.
+im_reg: register the input images to the reference image. The user should 
+provide the reference image with the im_ref parameter.
 
-im_ref: this is a reference image the user provides. In the header, the 
-following keywords should be present: CRVAL1, CRVAL2, which give the RA and DEC
-to which the images will be registered using im_reg.
+im_ref: user-provided reference image to which the other images are registered. 
+In the header, the  following keywords should be present: CRVAL1, CRVAL2, which 
+give the RA and DEC to which the images will be registered using im_reg.
 
-im_conv: it performs convolution to a common resolution, either Gaussian
-or using a PSF kernel. The user provides the angular resolution with the fwhm 
+im_conv: perform convolution to a common resolution, using either a Gaussian or
+a PSF kernel. For Gaussian kernels, the angular resolution is specified with the fwhm 
 parameter. If the PSF kernel is chosen, the user provides the PSF kernels with
 the following naming convention:
 
@@ -193,24 +192,23 @@ the following naming convention:
 For example: an input image named SI1.fits will have a corresponding
 kernel file named SI1_kernel.fits
 
-fwhm: the user provides the angular resolution in arcsec to which all images
-will be convolved with im_conv, if the Gaussian convolution is chosen, or if
-not all the input images have a corresponding kernel.
+fwhm: the angular resolution in arcsec to which all images will be convolved with im_conv, 
+if the Gaussian convolution is chosen, or if not all the input images have a corresponding kernel.
 
-kernels: the user provides the name of a directory containing kernel FITS 
+kernels: the name of a directory containing kernel FITS 
 images for each of the input images. If all input images do not have a 
 corresponding kernel image, then the Gaussian convolution will be performed for
 these images.
 
-im_regrid: it performs regridding of the convolved images to a common
+im_regrid: perform regridding of the convolved images to a common
 pixel scale. The pixel scale is defined by the im_pxsc parameter.
 
-im_pixsc: this gives the common pixel scale (in arcsec) used for the regridding
+im_pixsc: the common pixel scale (in arcsec) used for the regridding
 of the images in the im_regrid. It is a good idea the pixel scale and angular
 resolution of the images in the regrid step to conform to the Nyquist sampling
 rate: angular resolution = """ + `NYQUIST_SAMPLING_RATE` + """ * im_pixsc
 
-seds: it produces the spectral energy distribution on a pixel-by-pixel
+seds:  produce the spectral energy distribution on a pixel-by-pixel
 basis, on the regridded images.
 
 cleanup: if this parameter is present, then output files from previous 
@@ -222,25 +220,22 @@ processing will be done.
 NOTE: the following keywords must be present in all images, along with a 
 comment containing the units (where applicable), for optimal image processing:
 
-    BUNIT: this provides the physical units of the array values (i.e. the flux
-           unit).
-    CRVAL1: it contains the RA (in degrees) to which the images will be 
-            registered by im_reg
-    CRVAL2: it contains the DEC (in degrees) to which the images will be 
-            registered by im_reg
-    CDELT1: the pixelscale (in degrees) along the x-axis
-    CDELT2: the pixelscale (in degrees) along the y-axis
-    FLSCALE: this is the factor that converts the native flux units (as given
+    BUNIT: the physical units of the array values (i.e. the flux unit).
+    CRVAL1: the RA (in degrees) to which the images will be registered by im_reg
+    CRVAL2: the DEC (in degrees) to which the images will be registered by im_reg
+    CDELT1: the pixel scale (in degrees) along the x-axis
+    CDELT2: the pixel scale (in degrees) along the y-axis (not used)
+    FLSCALE: the factor that converts the native flux units (as given
              in the BUNIT keyword) to Jy/pixel. The units of this factor should
              be: (Jy/pixel) / (BUNIT unit). This keyword should be added in the
              case of data other than GALEX (FUV, NUV), 2MASS (J, H, Ks), 
              SPITZER (IRAC, MIPS), HERSCHEL (PACS, SPIRE; photometry)
-    INSTRUME: this provides the instrument information
+    INSTRUME: the name of the instrument used
     WAVELNTH: the representative wavelength (in micrometres) of the filter 
               bandpass
 
-If any of these keywords are missing, imagecube will attempt to determine them 
-as best as possible. The calculated values will be present in the headers of 
+If any of these keywords are missing, imagecube will attempt to determine them. 
+The calculated values will be present in the headers of 
 the output images; if they are not the desired values, please check the headers
 of your input images and make sure that these values are present.
     """)
@@ -797,7 +792,7 @@ def main(args=None):
         hdulist.close()
         pixelscale = u.deg.to(u.arcsec, abs(float(header['CDELT1'])))
         fov = u.deg.to(u.arcsec, abs(float(header['CDELT1']))) * float(header['NAXIS1'])
-        print("Checking: " + `pixelscale` + " < " + `ang_size` + " < " + `fov`)
+        print("Checking: is pixel scale (" + `pixelscale` + "\") <  ang_size (" + `ang_size` + "\") < FOV (" + `fov`+"\") ?")
         if (pixelscale < ang_size < fov):
             wavelength = header['WAVELNTH']
             header['WAVELNTH'] = (wavelength, 'micron')
@@ -805,9 +800,9 @@ def main(args=None):
             headers.append(header)
             filenames.append(filename)
         else:
-            print(filename + " does not meet the above criteria.")
+            print(filename + " does not meet the above criteria.") 
 
-    # Sort the lists by their WAVELNTH value
+    # Sort the lists by their WAVELNTH value, smallest to largest
     images_with_headers_unsorted = zip(image_data, headers, filenames)
     images_with_headers = sorted(images_with_headers_unsorted, 
                                  key=lambda header: header[1]['WAVELNTH'])
