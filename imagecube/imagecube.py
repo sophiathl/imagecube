@@ -27,7 +27,9 @@ import montage_wrapper as montage
 
 import numpy as np
 import scipy
-import pylab
+import matplotlib
+matplotlib.use('PS')
+import matplotlib.pyplot as plt
 from matplotlib import rc
 
 NYQUIST_SAMPLING_RATE = 3.3
@@ -665,13 +667,13 @@ def output_seds(images_with_headers):
 
         # Load the data for each image and append it to a master list of
         # all image data.
+        ##NOTETOSELF: change to use nddata structure
         hdulist = fits.open(input_filename)
         image_data = hdulist[0].data
         all_image_data.append(image_data)
         hdulist.close()
 
     sed_data = []
-
     for i in range(0, num_wavelengths):
         for j in range(len(all_image_data[i])):
             for k in range(len(all_image_data[i][j])):
@@ -689,30 +691,24 @@ def output_seds(images_with_headers):
             # change to the desired fonts
             rc('font', family='Times New Roman')
             rc('text', usetex=True)
-            
+            ##NOTETOSELF: think following lines could be rewritten more compactly
             wavelength_values = data[:,2][i*num_wavelengths:(i+1)*
                                 num_wavelengths]
             flux_values = data[:,3][i*num_wavelengths:(i+1)*num_wavelengths]
             x_values = data[:,0][i*num_wavelengths:(i+1)*num_wavelengths]
             y_values = data[:,1][i*num_wavelengths:(i+1)*num_wavelengths]
-
-            pylab.figure(i)
-            pylab.scatter(wavelength_values,flux_values)
-
+            fig, ax = plt.subplots()
+            ax.scatter(wavelength_values,flux_values)
             # axes specific
-            pylab.xlabel(r'log(Wavelength) (um)')					
-            pylab.ylabel(r'Flux (Jy/pixel)')
-            pylab.rc('axes', labelsize=14, linewidth=2, labelcolor='black')
-            pylab.semilogx()
-            pylab.axis([min(wavelength_values), max(wavelength_values),
-                       min(flux_values), max(flux_values)])
-
-            pylab.hold(True)
-
-            pylab.legend()
-            pylab.savefig(new_directory + '/' + `int(x_values[0])` + '_' + 
+            ax.set_xlabel(r'Wavelength ($\mu$m)')					
+            ax.set_ylabel(r'Flux density (Jy/pixel)')
+            rc('axes', labelsize=14, linewidth=2, labelcolor='black')
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.set_xlim(min(wavelength_values), max(wavelength_values)) #NOTETOSELF: doesn't quite seem to work
+            ax.set_ylim(min(flux_values), max(flux_values))
+            fig.savefig(new_directory + '/' + `int(x_values[0])` + '_' + 
                           `int(y_values[0])` + '_sed.eps')
-            #pylab.show()
             bar.update(i)
 
 def cleanup_output_files():
