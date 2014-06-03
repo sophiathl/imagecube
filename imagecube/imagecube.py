@@ -21,7 +21,7 @@ import os
 from astropy import units as u
 from astropy import constants
 from astropy.io import fits
-from astropy.nddata import make_kernel, convolve, convolve_fft
+from astropy.convolution import convolve, convolve_fft, Gaussian2DKernel
 import astropy.utils.console as console
 import montage_wrapper as montage
 
@@ -544,10 +544,9 @@ def convolve_images(images_with_headers):
             header = hdulist[0].header
             image_data = hdulist[0].data
             hdulist.close()
-
-            gaus_kernel_inp = make_kernel([3,3], kernelwidth=sigma_input, 
-                                          kerneltype='gaussian', 
-                                          trapslope=None, force_odd=True)
+            # NOTETOSELF: not completely clear whether 'width' is sigma or FWHM
+            # also, previous version had kernel being 3x3 pixels which seems pretty small!
+            gaus_kernel_inp = Gaussian2DKernel(width=sigma_input)
 
             # Do the convolution and save it as a new .fits file
             conv_result = convolve(image_data, gaus_kernel_inp)
