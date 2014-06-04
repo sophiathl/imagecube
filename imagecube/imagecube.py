@@ -265,7 +265,8 @@ def parse_command_line():
                                    "flux_conv", "im_conv", "im_reg", "im_ref=",
                                    "im_conv", "fwhm=", "kernels=", "im_pixsc=",
                                    "im_regrid", "seds", "cleanup", "help"])
-    except getopt.GetoptError:
+    except getopt.GetoptError, exc:
+        print(exc.msg)
         print("An error occurred. Check your parameters and try again.")
         sys.exit(2)
     for opt, arg in opts:
