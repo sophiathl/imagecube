@@ -17,12 +17,15 @@ import getopt
 import glob
 import math
 import os
+import warnings
 
 from astropy import units as u
 from astropy import constants
 from astropy.io import fits
 from astropy import wcs
 from astropy.convolution import convolve, convolve_fft, Gaussian2DKernel
+from astropy import log
+from astropy.utils.exceptions import AstropyUserWarning
 import astropy.utils.console as console
 import montage_wrapper as montage
 
@@ -406,10 +409,17 @@ def convert_images(images_with_headers):
         if ('FLSCALE' in images_with_headers[i][1]):
             conversion_factor = float(images_with_headers[i][1]['FLSCALE'])
         else:
-            instrument = images_with_headers[i][1]['INSTRUME']
-            conversion_factor = get_conversion_factor(
-                images_with_headers[i][1], instrument
-            )
+            try:
+                instrument = images_with_headers[i][1]['INSTRUME']
+                conversion_factor = get_conversion_factor(
+                    images_with_headers[i][1], instrument)
+            except KeyError:
+                conversion_factor = 0
+            if conversion_factor == 0:
+                warnings.warn("No conversion factor for image %s, using 1"\
+                     % images_with_headers[i][2],\
+                    AstropyUserWarning)
+                conversion_factor = 1.0
 
         # Some manipulation of filenames and directories
         original_filename = os.path.basename(images_with_headers[i][2])
@@ -566,18 +576,18 @@ def convolve_images(images_with_headers):
             header = hdulist[0].header
             image_data = hdulist[0].data
             hdulist.close()
-            # NOTETOSELF: not completely clear whether 'width' is sigma or FWHM
+            # NOTETOSELF: not completely clear whether Gaussian2DKernel 'width' is sigma or FWHM
             # also, previous version had kernel being 3x3 pixels which seems pretty small!
             gaus_kernel_inp = Gaussian2DKernel(width=sigma_input)
 
             # Do the convolution and save it as a new .fits file
             conv_result = convolve(image_data, gaus_kernel_inp)
             header['FWHM'] = (fwhm_input, 
-                              'The FWHM value used in the convolution step.')
+                              'FWHM value used in convolution, in pixels')
 
             hdu = fits.PrimaryHDU(conv_result, header)
             hdu.writeto(convolved_filename, clobber=True)
-        return
+    return
 
 def create_data_cube(images_with_headers):
     """
