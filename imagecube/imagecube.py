@@ -312,6 +312,7 @@ def parse_command_line():
             print("The file " + main_reference_image + 
                   " could not be found in the directory " + directory)
             sys.exit()
+    return
 
 def get_conversion_factor(header, instrument):
     """
@@ -429,6 +430,7 @@ def convert_images(images_with_headers):
         )
         hdu = fits.PrimaryHDU(converted_data_array, images_with_headers[i][1])
         hdu.writeto(converted_filename, clobber=True)
+    return
 
 #modified from aplpy.wcs_util.get_pixel_scales
 def get_pixel_scale(header):
@@ -492,6 +494,10 @@ def register_images(images_with_headers):
                               pix_size=native_pixelscale, rotation=0.)
         montage.wrappers.reproject(input_filename, registered_filename, 
                                    header=artificial_filename, exact_size=True)  
+
+    return
+
+
 def convolve_images(images_with_headers):
     """
     Convolves all of the images to a common resolution using a simple
@@ -571,6 +577,7 @@ def convolve_images(images_with_headers):
 
             hdu = fits.PrimaryHDU(conv_result, header)
             hdu.writeto(convolved_filename, clobber=True)
+        return
 
 def create_data_cube(images_with_headers):
     """
@@ -608,6 +615,7 @@ def create_data_cube(images_with_headers):
         hdulist.close()
 
     fits.writeto(new_directory + '/' + 'datacube.fits', np.copy(resampled_images), resampled_headers[0], clobber=True)
+    return
 
 def resample_images(images_with_headers):
     """
@@ -649,6 +657,7 @@ def resample_images(images_with_headers):
             header='grid_final_resample_header')  
 
     create_data_cube(images_with_headers)
+    return
 
 def output_seds(images_with_headers):
     """
@@ -724,6 +733,7 @@ def output_seds(images_with_headers):
             fig.savefig(new_directory + '/' + `int(x_values[0])` + '_' + 
                           `int(y_values[0])` + '_sed.eps')
             bar.update(i)
+    return
 
 def cleanup_output_files():
     """
