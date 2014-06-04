@@ -505,6 +505,7 @@ def register_images(images_with_headers):
         montage.wrappers.reproject(input_filename, registered_filename, 
                                    header=artificial_filename, exact_size=True)  
 
+        os.unlink(artificial_filename)
     return
 
 
@@ -666,6 +667,7 @@ def resample_images(images_with_headers):
         montage.wrappers.reproject(input_filename, resampled_filename, 
             header='grid_final_resample_header')  
 
+    os.unlink('grid_final_resample_header')
     create_data_cube(images_with_headers)
     return
 
