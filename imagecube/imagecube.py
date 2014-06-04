@@ -21,6 +21,7 @@ import os
 from astropy import units as u
 from astropy import constants
 from astropy.io import fits
+from astropy import wcs
 from astropy.convolution import convolve, convolve_fft, Gaussian2DKernel
 import astropy.utils.console as console
 import montage_wrapper as montage
@@ -335,8 +336,7 @@ def get_conversion_factor(header, instrument):
     # value after running through all of the possible cases, then an error has
     # occurred.
     conversion_factor = 0
-    pixelscale = u.deg.to(u.arcsec, abs(float(header['CDELT1'])))
-
+    pixelscale = get_pixel_scale(header)
 
     if (instrument == 'IRAC'):
         conversion_factor = (MJY_PER_SR_TO_JY_PER_ARCSEC2) * (pixelscale**2)
@@ -429,6 +429,27 @@ def convert_images(images_with_headers):
         hdu = fits.PrimaryHDU(converted_data_array, images_with_headers[i][1])
         hdu.writeto(converted_filename, clobber=True)
 
+#modified from aplpy.wcs_util.get_pixel_scales
+def get_pixel_scale(header):
+    '''
+    Compute the pixel scale in arcseconds per pixel from an image WCS
+    Assumes WCS is in degrees (TODO: generalize)
+
+    Parameters
+    ----------
+    header: FITS header of header
+
+
+    '''
+    w = wcs.WCS(header)
+
+    cdelt = np.matrix(w.wcs.get_cdelt())
+    pc = np.matrix(w.wcs.get_pc())
+    scale = np.array(cdelt * pc)[0,:]
+    pix_scale = abs(scale[0]) * u.deg.to(u.arcsec)
+    return(pix_scale)
+
+
 def register_images(images_with_headers):
     """
     Registers all of the images to a common WCS
@@ -448,8 +469,7 @@ def register_images(images_with_headers):
 
     for i in range(0, len(images_with_headers)):
 
-        native_pixelscale = u.deg.to(u.arcsec, 
-            abs(float(images_with_headers[i][1]['CDELT1'])))
+        native_pixelscale = get_pixel_scale(images_with_headers[i][1])
 
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
@@ -526,9 +546,7 @@ def convolve_images(images_with_headers):
             #fits.writeto(convolved_filename, convolved_image, clobber=True)
 
         else:
-            native_pixelscale = u.deg.to(
-                u.arcsec, abs(float(images_with_headers[i][1]['CDELT1']))
-            )
+            native_pixelscale = get_pixel_scale(images_with_headers[i][1])
             sigma_input = (fwhm_input / 
                            (2* math.sqrt(2*math.log (2) ) * native_pixelscale))
 
@@ -790,8 +808,8 @@ def main(args=None):
         # things to it later on
         filename = os.path.splitext(hdulist.filename())[0]
         hdulist.close()
-        pixelscale = u.deg.to(u.arcsec, abs(float(header['CDELT1'])))
-        fov = u.deg.to(u.arcsec, abs(float(header['CDELT1']))) * float(header['NAXIS1'])
+        pixelscale = get_pixel_scale(header)
+        fov = pixelscale * float(header['NAXIS1'])
         print("Checking: is pixel scale (" + `pixelscale` + "\") <  ang_size (" + `ang_size` + "\") < FOV (" + `fov`+"\") ?")
         if (pixelscale < ang_size < fov):
             wavelength = header['WAVELNTH']
