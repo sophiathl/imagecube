@@ -237,9 +237,8 @@ comment containing the units (where applicable), for optimal image processing:
     INSTRUME: the name of the instrument used
     WAVELNTH: the representative wavelength (in micrometres) of the filter 
               bandpass
-
-If any of these keywords are missing, imagecube will attempt to determine them. 
-The calculated values will be present in the headers of 
+If any of these keywords are missing, imagecube will attempt to determine them 
+as best as possible. The calculated values will be present in the headers of 
 the output images; if they are not the desired values, please check the headers
 of your input images and make sure that these values are present.
     """)
@@ -484,7 +483,6 @@ def merge_headers(montage_hfile, orig_header, out_file):
     orig_header.tofile(out_file,sep='\n',endcard=True,padding=False,clobber=True)
     return
 
-
 def register_images(images_with_headers):
     """
     Registers all of the images to a common WCS
@@ -531,7 +529,6 @@ def register_images(images_with_headers):
         os.unlink(artificial_filename)
     return
 
-
 def convolve_images(images_with_headers):
     """
     Convolves all of the images to a common resolution using a simple
@@ -567,7 +564,6 @@ def convolve_images(images_with_headers):
 
         #if use_kernels and os.path.exists(kernel_filename):
         if os.path.exists(kernel_filename):
-
             log.info("Found a kernel; will convolve with it shortly.")
             #reading the science image:
             #science_image = fits.getdata(input_filename)
@@ -688,7 +684,6 @@ def resample_images(images_with_headers):
                           "_convolved.fits")
         if not os.path.exists(new_directory):
             os.makedirs(new_directory)
-
         merge_headers('grid_final_resample_header', images_with_headers[i][1],artificial_header)
         montage.wrappers.reproject(input_filename, resampled_filename, 
             header=artificial_header)  
@@ -729,7 +724,7 @@ def output_seds(images_with_headers):
 
         # Load the data for each image and append it to a master list of
         # all image data.
-        ##NOTETOSELF: change to use nddata structure
+        ##NOTETOSELF: change to use nddata structure?
         hdulist = fits.open(input_filename)
         image_data = hdulist[0].data
         all_image_data.append(image_data)
@@ -743,7 +738,7 @@ def output_seds(images_with_headers):
                                 all_image_data[i][j][k]))
 
     data = np.copy(sorted(sed_data))
-    np.savetxt('test.out', data, fmt='%d,%d,%f,%f', 
+    np.savetxt('test.out', data, fmt='%f,%f,%f,%f', 
                header='x, y, wavelength (um), flux units (Jy/pixel)')
     num_seds = int(len(data) / num_wavelengths)
 
@@ -753,7 +748,6 @@ def output_seds(images_with_headers):
             # change to the desired fonts
             rc('font', family='Times New Roman')
             rc('text', usetex=True)
-            ##NOTETOSELF: think following lines could be rewritten more compactly
             wavelength_values = data[:,2][i*num_wavelengths:(i+1)*
                                 num_wavelengths]
             flux_values = data[:,3][i*num_wavelengths:(i+1)*num_wavelengths]
@@ -870,7 +864,7 @@ def main(args=None):
         else:
             warnings.warn("Image %s does not meet the above criteria." % filename, AstropyUserWarning) 
 
-    # Sort the lists by their WAVELNTH value, smallest to largest
+    # Sort the lists by their WAVELNTH value
     images_with_headers_unsorted = zip(image_data, headers, filenames)
     images_with_headers = sorted(images_with_headers_unsorted, 
                                  key=lambda header: header[1]['WAVELNTH'])

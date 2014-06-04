@@ -1,24 +1,12 @@
 #!/usr/bin/env python
 # Licensed under a 3-clause BSD style license - see LICENSE.rst
 
-import sys
-import imp
-try:
-    # This incantation forces distribute to be used (over setuptools) if it is
-    # available on the path; otherwise distribute will be downloaded.
-    import pkg_resources
-    distribute = pkg_resources.get_distribution('distribute')
-    if pkg_resources.get_distribution('setuptools') != distribute:
-        sys.path.insert(1, distribute.location)
-        distribute.activate()
-        imp.reload(pkg_resources)
-except:  # There are several types of exceptions that can occur here
-    from distribute_setup import use_setuptools
-    use_setuptools()
-
 import glob
 import os
-from setuptools import setup, find_packages
+import sys
+
+import ah_bootstrap
+from setuptools import setup
 
 #A dirty hack to get around some early import/configurations ambiguities
 if sys.version_info[0] >= 3:
@@ -28,22 +16,33 @@ else:
 builtins._ASTROPY_SETUP_ = True
 
 import astropy
-from astropy.setup_helpers import (register_commands, adjust_compiler,
-                                   filter_packages, update_package_files,
-                                   get_debug_option)
-from astropy.version_helpers import get_git_devstr, generate_version_py
+from astropy.setup_helpers import (register_commands, adjust_compiler, get_debug_option)
+from astropy.version_helpers import get_git_devstr,generate_version_py
 
-# Set affiliated package-specific settings
-PACKAGENAME = 'imagecube'
-DESCRIPTION = 'The purpose of imagecube is to facilitate the process of assembling multi-wavelength astronomical imaging datasets.'
-LONG_DESCRIPTION = 'The purpose of imagecube is to facilitate the process of assembling multi-wavelength astronomical imaging datasets. This critical intermediate step between data discovery and scientific analysis involves a number of detailed and tedious steps which can be automated by making use  of features in existing Astropy modules. It is common in astronomy to deal with observations of a target that are taken at different wavelengths of light, from X-rays to radio/submillimetre. These multi-wavelength observations, taken either from ground-based or from space-based telescopes, produce images with varying properties, including angular resolution, pixel scales,  and flux units. In order to perform multi-wavelength analyses, some common analysis steps have to be performed on each of a set of images. For example, the required image processing could involve conversion to standard flux units,  regridding to a specified pixel scale, and convolution to a specific angular resolution. Automating these tasks will free astronomers from repetitive calibration work and yield a multi-wavelength image cube ready for analysis.  '
-AUTHOR = 'Jeff Taylor'
-AUTHOR_EMAIL = 'jeff.c.taylor@gmail.com'
-LICENSE = 'BSD'
-URL = 'http://astropy.org'
+# Get some values from the setup.cfg
+from distutils import config
+conf = config.ConfigParser()
+conf.read(['setup.cfg'])
+metadata = dict(conf.items('metadata'))
+
+PACKAGENAME = metadata.get('package_name', 'packagename')
+DESCRIPTION = metadata.get('description', 'Astropy affiliated package')
+AUTHOR = metadata.get('author', '')
+AUTHOR_EMAIL = metadata.get('author_email', '')
+LICENSE = metadata.get('license', 'unknown')
+URL = metadata.get('url', 'http://astropy.org')
+
+# Get the long description from the package's docstring
+__import__(PACKAGENAME)
+package = sys.modules[PACKAGENAME]
+LONG_DESCRIPTION = package.__doc__
+
+# Store the package name in a built-in variable so it's easy
+# to get from other parts of the setup infrastructure
+builtins._ASTROPY_PACKAGE_NAME_ = PACKAGENAME
 
 # VERSION should be PEP386 compatible (http://www.python.org/dev/peps/pep-0386)
-VERSION = '0.0.dev'
+VERSION = '0.1.dev'
 
 # Indicates if this version is a release version
 RELEASE = 'dev' not in VERSION
@@ -63,39 +62,69 @@ adjust_compiler(PACKAGENAME)
 # Freeze build information in version.py
 generate_version_py(PACKAGENAME, VERSION, RELEASE, get_debug_option())
 
-# Use the find_packages tool to locate all packages and modules
-packagenames = filter_packages(find_packages())
-
 # Treat everything in scripts except README.rst as a script to be installed
 scripts = [fname for fname in glob.glob(os.path.join('scripts', '*'))
            if os.path.basename(fname) != 'README.rst']
 
-# Additional C extensions that are not Cython-based should be added here.
-extensions = []
+#here
+try:
 
-# A dictionary to keep track of all package data to install
-package_data = {PACKAGENAME: ['data/*']}
+    from astropy.setup_helpers import get_package_info
 
-# A dictionary to keep track of extra packagedir mappings
-package_dirs = {}
+    # Get configuration information from all of the various subpackages.
+    # See the docstring for setup_helpers.update_package_files for more
+    # details.
+    package_info = get_package_info(PACKAGENAME)
 
-# Update extensions, package_data, packagenames and package_dirs from
-# any sub-packages that define their own extension modules and package
-# data.  See the docstring for setup_helpers.update_package_files for
-# more details.
-update_package_files(PACKAGENAME, extensions, package_data, packagenames,
-                     package_dirs)
+    # Add the project-global data
+    package_info['package_data'][PACKAGENAME] = ['data/*']
 
+except ImportError: # compatibility with Astropy 0.2 - can be removed in cases
+                    # where Astropy 0.2 is no longer supported
 
-setup(name=PACKAGENAME,
+    from setuptools import find_packages
+    from astropy.setup_helpers import filter_packages, update_package_files
+
+    package_info = {}
+
+    # Use the find_packages tool to locate all packages and modules
+    package_info['packages'] = filter_packages(find_packages())
+
+    # Additional C extensions that are not Cython-based should be added here.
+    package_info['ext_modules'] = []
+
+    # A dictionary to keep track of all package data to install
+    package_info['package_data'] = {PACKAGENAME: ['data/*']}
+
+    # A dictionary to keep track of extra packagedir mappings
+    package_info['package_dir'] = {}
+
+    # Update extensions, package_data, packagenames and package_dirs from
+    # any sub-packages that define their own extension modules and package
+    # data.  See the docstring for setup_helpers.update_package_files for
+    # more details.
+    update_package_files(PACKAGENAME, package_info['ext_modules'],
+                         package_info['package_data'], package_info['packages'],
+                         package_info['package_dir'])
+#here    
+
+# Include all .c files, recursively, including those generated by
+# Cython, since we can not do this in MANIFEST.in with a "dynamic"
+# directory name.
+c_files = []
+for root, dirs, files in os.walk(PACKAGENAME):
+    for filename in files:
+        if filename.endswith('.c'):
+            c_files.append(
+                os.path.join(
+                    os.path.relpath(root, PACKAGENAME), filename))
+package_info['package_data'][PACKAGENAME].extend(c_files)
+
+setup(name='imagecube',
       version=VERSION,
       description=DESCRIPTION,
-      packages=packagenames,
-      package_data=package_data,
-      package_dir=package_dirs,
-      ext_modules=extensions,
       scripts=scripts,
-      requires=['astropy'],
+      requires=['astropy','numpy','matplotlib','montage_wrapper'],
       install_requires=['astropy'],
       provides=[PACKAGENAME],
       author=AUTHOR,
@@ -105,5 +134,6 @@ setup(name=PACKAGENAME,
       long_description=LONG_DESCRIPTION,
       cmdclass=cmdclassd,
       zip_safe=False,
-      use_2to3=True
-      )
+      use_2to3=True,
+      **package_info
+)

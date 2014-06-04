@@ -10,4 +10,6 @@ this package is here:
   imagecube/index.rst
 
 .. note:: Do not edit this page - instead, place all documentation for the
-          affiliated package inside ``imagecube/``
+          affiliated package inside ``packagename/``
+
+
