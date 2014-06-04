@@ -1,5 +1,5 @@
 Imagecube
-Copyright (c) 2013-2014, Sophia Lianou, Pauline Barmby and Jeff Taylor
+Copyright (c) 2013-2014, Jeff Taylor, and Sophia Lianou, and Pauline Barmby
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
