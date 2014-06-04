@@ -376,7 +376,7 @@ def get_conversion_factor(header, instrument):
         # header# keyword
         if ('BUNIT' in header):
             if (header['BUNIT'].lower() != 'jy/pixel'):
-                print("Instrument is PACS, but Jy/pixel is not being used in "
+                log.info("Instrument is PACS, but Jy/pixel is not being used in "
                       + "BUNIT.")
         conversion_factor = 1;
 
@@ -539,12 +539,12 @@ def convolve_images(images_with_headers):
         # Otherwise, we convolve with a Gaussian kernel.
         kernel_filename = (original_directory + "/" + kernel_directory + "/" + 
                            original_filename + "_kernel.fits")
-        print("Looking for " + kernel_filename)
+        log.info("Looking for " + kernel_filename)
 
         #if use_kernels and os.path.exists(kernel_filename):
         if os.path.exists(kernel_filename):
 
-            print("Found a kernel; will convolve with it shortly.")
+            log.info("Found a kernel; will convolve with it shortly.")
             #reading the science image:
             #science_image = fits.getdata(input_filename)
             science_hdulist = fits.open(input_filename)
@@ -756,7 +756,7 @@ def cleanup_output_files():
     for d in ('converted', 'registered', 'convolved', 'resampled', 'seds'):
         subdir = directory + '/' + d
         if (os.path.isdir(subdir)):
-            print("Removing " + subdir)
+            log.info("Removing " + subdir)
             shutil.rmtree(subdir)
 
 #if __name__ == '__main__':
@@ -831,7 +831,7 @@ def main(args=None):
         hdulist.close()
         pixelscale = get_pixel_scale(header)
         fov = pixelscale * float(header['NAXIS1'])
-        print("Checking: is pixel scale (" + `pixelscale` + "\") <  ang_size (" + `ang_size` + "\") < FOV (" + `fov`+"\") ?")
+        log.info("Checking: is pixel scale (" + `pixelscale` + "\") <  ang_size (" + `ang_size` + "\") < FOV (" + `fov`+"\") ?")
         if (pixelscale < ang_size < fov):
             wavelength = header['WAVELNTH']
             header['WAVELNTH'] = (wavelength, 'micron')
@@ -839,7 +839,7 @@ def main(args=None):
             headers.append(header)
             filenames.append(filename)
         else:
-            print(filename + " does not meet the above criteria.") 
+            warnings.warn("Image %s does not meet the above criteria." % filename, AstropyUserWarning) 
 
     # Sort the lists by their WAVELNTH value, smallest to largest
     images_with_headers_unsorted = zip(image_data, headers, filenames)
