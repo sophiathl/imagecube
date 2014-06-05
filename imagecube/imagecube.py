@@ -17,17 +17,23 @@ import getopt
 import glob
 import math
 import os
+import warnings
 
 from astropy import units as u
 from astropy import constants
 from astropy.io import fits
-from astropy.nddata import make_kernel, convolve, convolve_fft
+from astropy import wcs
+from astropy.convolution import convolve, convolve_fft, Gaussian2DKernel
+from astropy import log
+from astropy.utils.exceptions import AstropyUserWarning
 import astropy.utils.console as console
 import montage_wrapper as montage
 
 import numpy as np
 import scipy
-import pylab
+import matplotlib
+matplotlib.use('PS')
+import matplotlib.pyplot as plt
 from matplotlib import rc
 
 NYQUIST_SAMPLING_RATE = 3.3
@@ -164,25 +170,24 @@ Usage: """ + sys.argv[0] + """ --dir <directory> --ang_size <angular_size>
 dir: the path to the directory containing the <input FITS files> to be 
 processed
 
-ang_size: the angular size of the object in arcsec
+ang_size: the angular size of the output image cube in arcsec
 
-flux_conv: if flux units are not in Jy/pixel, this task will perform unit
-conversion to Jy/pixel.
+flux_conv: perform unit conversion to Jy/pixel for all images not already
+in these units.
 NOTE: If data are not GALEX, 2MASS, MIPS, IRAC, PACS, SPIRE, then the user
 should provide flux unit conversion factors to go from the image's native
 flux units to Jy/pixel. This information should be recorded in the header
 keyword FLUXCONV for each input image.
 
-im_reg: it performs the registration of the input images to the reference
-image. The user should provide the reference image with the im_ref 
-parameter.
+im_reg: register the input images to the reference image. The user should 
+provide the reference image with the im_ref parameter.
 
-im_ref: this is a reference image the user provides. In the header, the 
-following keywords should be present: CRVAL1, CRVAL2, which give the RA and DEC
-to which the images will be registered using im_reg.
+im_ref: user-provided reference image to which the other images are registered. 
+In the header, the  following keywords should be present: CRVAL1, CRVAL2, which 
+give the RA and DEC to which the images will be registered using im_reg.
 
-im_conv: it performs convolution to a common resolution, either Gaussian
-or using a PSF kernel. The user provides the angular resolution with the fwhm 
+im_conv: perform convolution to a common resolution, using either a Gaussian or
+a PSF kernel. For Gaussian kernels, the angular resolution is specified with the fwhm 
 parameter. If the PSF kernel is chosen, the user provides the PSF kernels with
 the following naming convention:
 
@@ -191,24 +196,23 @@ the following naming convention:
 For example: an input image named SI1.fits will have a corresponding
 kernel file named SI1_kernel.fits
 
-fwhm: the user provides the angular resolution in arcsec to which all images
-will be convolved with im_conv, if the Gaussian convolution is chosen, or if
-not all the input images have a corresponding kernel.
+fwhm: the angular resolution in arcsec to which all images will be convolved with im_conv, 
+if the Gaussian convolution is chosen, or if not all the input images have a corresponding kernel.
 
-kernels: the user provides the name of a directory containing kernel FITS 
+kernels: the name of a directory containing kernel FITS 
 images for each of the input images. If all input images do not have a 
 corresponding kernel image, then the Gaussian convolution will be performed for
 these images.
 
-im_regrid: it performs regridding of the convolved images to a common
+im_regrid: perform regridding of the convolved images to a common
 pixel scale. The pixel scale is defined by the im_pxsc parameter.
 
-im_pixsc: this gives the common pixel scale (in arcsec) used for the regridding
+im_pixsc: the common pixel scale (in arcsec) used for the regridding
 of the images in the im_regrid. It is a good idea the pixel scale and angular
 resolution of the images in the regrid step to conform to the Nyquist sampling
 rate: angular resolution = """ + `NYQUIST_SAMPLING_RATE` + """ * im_pixsc
 
-seds: it produces the spectral energy distribution on a pixel-by-pixel
+seds:  produce the spectral energy distribution on a pixel-by-pixel
 basis, on the regridded images.
 
 cleanup: if this parameter is present, then output files from previous 
@@ -220,23 +224,19 @@ processing will be done.
 NOTE: the following keywords must be present in all images, along with a 
 comment containing the units (where applicable), for optimal image processing:
 
-    BUNIT: this provides the physical units of the array values (i.e. the flux
-           unit).
-    CRVAL1: it contains the RA (in degrees) to which the images will be 
-            registered by im_reg
-    CRVAL2: it contains the DEC (in degrees) to which the images will be 
-            registered by im_reg
-    CDELT1: the pixelscale (in degrees) along the x-axis
-    CDELT2: the pixelscale (in degrees) along the y-axis
-    FLSCALE: this is the factor that converts the native flux units (as given
+    BUNIT: the physical units of the array values (i.e. the flux unit).
+    CRVAL1: the RA (in degrees) to which the images will be registered by im_reg
+    CRVAL2: the DEC (in degrees) to which the images will be registered by im_reg
+    CDELT1: the pixel scale (in degrees) along the x-axis
+    CDELT2: the pixel scale (in degrees) along the y-axis (not used)
+    FLSCALE: the factor that converts the native flux units (as given
              in the BUNIT keyword) to Jy/pixel. The units of this factor should
              be: (Jy/pixel) / (BUNIT unit). This keyword should be added in the
              case of data other than GALEX (FUV, NUV), 2MASS (J, H, Ks), 
              SPITZER (IRAC, MIPS), HERSCHEL (PACS, SPIRE; photometry)
-    INSTRUME: this provides the instrument information
+    INSTRUME: the name of the instrument used
     WAVELNTH: the representative wavelength (in micrometres) of the filter 
               bandpass
-
 If any of these keywords are missing, imagecube will attempt to determine them 
 as best as possible. The calculated values will be present in the headers of 
 the output images; if they are not the desired values, please check the headers
@@ -267,7 +267,8 @@ def parse_command_line():
                                    "flux_conv", "im_conv", "im_reg", "im_ref=",
                                    "im_conv", "fwhm=", "kernels=", "im_pixsc=",
                                    "im_regrid", "seds", "cleanup", "help"])
-    except getopt.GetoptError:
+    except getopt.GetoptError, exc:
+        print(exc.msg)
         print("An error occurred. Check your parameters and try again.")
         sys.exit(2)
     for opt, arg in opts:
@@ -313,6 +314,7 @@ def parse_command_line():
             print("The file " + main_reference_image + 
                   " could not be found in the directory " + directory)
             sys.exit()
+    return
 
 def get_conversion_factor(header, instrument):
     """
@@ -338,8 +340,7 @@ def get_conversion_factor(header, instrument):
     # value after running through all of the possible cases, then an error has
     # occurred.
     conversion_factor = 0
-    pixelscale = u.deg.to(u.arcsec, abs(float(header['CDELT1'])))
-
+    pixelscale = get_pixel_scale(header)
 
     if (instrument == 'IRAC'):
         conversion_factor = (MJY_PER_SR_TO_JY_PER_ARCSEC2) * (pixelscale**2)
@@ -374,7 +375,7 @@ def get_conversion_factor(header, instrument):
         # header# keyword
         if ('BUNIT' in header):
             if (header['BUNIT'].lower() != 'jy/pixel'):
-                print("Instrument is PACS, but Jy/pixel is not being used in "
+                log.info("Instrument is PACS, but Jy/pixel is not being used in "
                       + "BUNIT.")
         conversion_factor = 1;
 
@@ -407,10 +408,17 @@ def convert_images(images_with_headers):
         if ('FLSCALE' in images_with_headers[i][1]):
             conversion_factor = float(images_with_headers[i][1]['FLSCALE'])
         else:
-            instrument = images_with_headers[i][1]['INSTRUME']
-            conversion_factor = get_conversion_factor(
-                images_with_headers[i][1], instrument
-            )
+            try:
+                instrument = images_with_headers[i][1]['INSTRUME']
+                conversion_factor = get_conversion_factor(
+                    images_with_headers[i][1], instrument)
+            except KeyError:
+                conversion_factor = 0
+            if conversion_factor == 0:
+                warnings.warn("No conversion factor for image %s, using 1"\
+                     % images_with_headers[i][2],\
+                    AstropyUserWarning)
+                conversion_factor = 1.0
 
         # Some manipulation of filenames and directories
         original_filename = os.path.basename(images_with_headers[i][2])
@@ -431,6 +439,49 @@ def convert_images(images_with_headers):
         )
         hdu = fits.PrimaryHDU(converted_data_array, images_with_headers[i][1])
         hdu.writeto(converted_filename, clobber=True)
+    return
+
+#modified from aplpy.wcs_util.get_pixel_scales
+def get_pixel_scale(header):
+    '''
+    Compute the pixel scale in arcseconds per pixel from an image WCS
+    Assumes WCS is in degrees (TODO: generalize)
+
+    Parameters
+    ----------
+    header: FITS header of image
+
+
+    '''
+    w = wcs.WCS(header)
+
+    cdelt = np.matrix(w.wcs.get_cdelt())
+    pc = np.matrix(w.wcs.get_pc())
+    scale = np.array(cdelt * pc)[0,:]
+    pix_scale = abs(scale[0]) * u.deg.to(u.arcsec)
+    return(pix_scale)
+
+def merge_headers(montage_hfile, orig_header, out_file):
+    '''
+    Merges an original image header with the WCS info
+    in a header file generated by montage.mHdr.
+    Puts the results into out_file.
+
+
+    Parameters
+    ----------
+    montage_hfile: a text file generated by montage.mHdr, 
+    which contains only WCS information
+    orig_header: FITS header of image, contains all the other
+    stuff we want to keep
+
+    '''
+    montage_header = fits.Header.fromtextfile(montage_hfile)
+    for key in orig_header.keys():
+        if key in montage_header.keys():
+            orig_header[key] = montage_header[key]
+    orig_header.tofile(out_file,sep='\n',endcard=True,padding=False,clobber=True)
+    return
 
 def register_images(images_with_headers):
     """
@@ -451,8 +502,7 @@ def register_images(images_with_headers):
 
     for i in range(0, len(images_with_headers)):
 
-        native_pixelscale = u.deg.to(u.arcsec, 
-            abs(float(images_with_headers[i][1]['CDELT1'])))
+        native_pixelscale = get_pixel_scale(images_with_headers[i][1])
 
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
@@ -472,8 +522,13 @@ def register_images(images_with_headers):
                               system='eq', equinox=2000.0, 
                               height=width_and_height, 
                               pix_size=native_pixelscale, rotation=0.)
+        merge_headers(artificial_filename, images_with_headers[i][1], artificial_filename)
         montage.wrappers.reproject(input_filename, registered_filename, 
                                    header=artificial_filename, exact_size=True)  
+
+        os.unlink(artificial_filename)
+    return
+
 def convolve_images(images_with_headers):
     """
     Convolves all of the images to a common resolution using a simple
@@ -505,12 +560,11 @@ def convolve_images(images_with_headers):
         # Otherwise, we convolve with a Gaussian kernel.
         kernel_filename = (original_directory + "/" + kernel_directory + "/" + 
                            original_filename + "_kernel.fits")
-        print("Looking for " + kernel_filename)
+        log.info("Looking for " + kernel_filename)
 
         #if use_kernels and os.path.exists(kernel_filename):
         if os.path.exists(kernel_filename):
-
-            print("Found a kernel; will convolve with it shortly.")
+            log.info("Found a kernel; will convolve with it shortly.")
             #reading the science image:
             #science_image = fits.getdata(input_filename)
             science_hdulist = fits.open(input_filename)
@@ -529,9 +583,7 @@ def convolve_images(images_with_headers):
             #fits.writeto(convolved_filename, convolved_image, clobber=True)
 
         else:
-            native_pixelscale = u.deg.to(
-                u.arcsec, abs(float(images_with_headers[i][1]['CDELT1']))
-            )
+            native_pixelscale = get_pixel_scale(images_with_headers[i][1])
             sigma_input = (fwhm_input / 
                            (2* math.sqrt(2*math.log (2) ) * native_pixelscale))
 
@@ -544,18 +596,18 @@ def convolve_images(images_with_headers):
             header = hdulist[0].header
             image_data = hdulist[0].data
             hdulist.close()
-
-            gaus_kernel_inp = make_kernel([3,3], kernelwidth=sigma_input, 
-                                          kerneltype='gaussian', 
-                                          trapslope=None, force_odd=True)
+            # NOTETOSELF: not completely clear whether Gaussian2DKernel 'width' is sigma or FWHM
+            # also, previous version had kernel being 3x3 pixels which seems pretty small!
+            gaus_kernel_inp = Gaussian2DKernel(width=sigma_input)
 
             # Do the convolution and save it as a new .fits file
             conv_result = convolve(image_data, gaus_kernel_inp)
             header['FWHM'] = (fwhm_input, 
-                              'The FWHM value used in the convolution step.')
+                              'FWHM value used in convolution, in pixels')
 
             hdu = fits.PrimaryHDU(conv_result, header)
             hdu.writeto(convolved_filename, clobber=True)
+    return
 
 def create_data_cube(images_with_headers):
     """
@@ -593,6 +645,7 @@ def create_data_cube(images_with_headers):
         hdulist.close()
 
     fits.writeto(new_directory + '/' + 'datacube.fits', np.copy(resampled_images), resampled_headers[0], clobber=True)
+    return
 
 def resample_images(images_with_headers):
     """
@@ -622,6 +675,8 @@ def resample_images(images_with_headers):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
         new_directory = original_directory + "/resampled/"
+        artificial_header = (new_directory + original_filename + 
+                               "_artheader")
         resampled_filename = (new_directory + original_filename  + 
                               "_resampled.fits")
         input_directory = original_directory + "/convolved/"
@@ -629,11 +684,14 @@ def resample_images(images_with_headers):
                           "_convolved.fits")
         if not os.path.exists(new_directory):
             os.makedirs(new_directory)
-
+        merge_headers('grid_final_resample_header', images_with_headers[i][1],artificial_header)
         montage.wrappers.reproject(input_filename, resampled_filename, 
-            header='grid_final_resample_header')  
+            header=artificial_header)  
+        os.unlink(artificial_header)
 
+    os.unlink('grid_final_resample_header')
     create_data_cube(images_with_headers)
+    return
 
 def output_seds(images_with_headers):
     """
@@ -666,13 +724,13 @@ def output_seds(images_with_headers):
 
         # Load the data for each image and append it to a master list of
         # all image data.
+        ##NOTETOSELF: change to use nddata structure?
         hdulist = fits.open(input_filename)
         image_data = hdulist[0].data
         all_image_data.append(image_data)
         hdulist.close()
 
     sed_data = []
-
     for i in range(0, num_wavelengths):
         for j in range(len(all_image_data[i])):
             for k in range(len(all_image_data[i][j])):
@@ -690,31 +748,25 @@ def output_seds(images_with_headers):
             # change to the desired fonts
             rc('font', family='Times New Roman')
             rc('text', usetex=True)
-            
             wavelength_values = data[:,2][i*num_wavelengths:(i+1)*
                                 num_wavelengths]
             flux_values = data[:,3][i*num_wavelengths:(i+1)*num_wavelengths]
             x_values = data[:,0][i*num_wavelengths:(i+1)*num_wavelengths]
             y_values = data[:,1][i*num_wavelengths:(i+1)*num_wavelengths]
-
-            pylab.figure(i)
-            pylab.scatter(wavelength_values,flux_values)
-
+            fig, ax = plt.subplots()
+            ax.scatter(wavelength_values,flux_values)
             # axes specific
-            pylab.xlabel(r'log(Wavelength) (um)')					
-            pylab.ylabel(r'Flux (Jy/pixel)')
-            pylab.rc('axes', labelsize=14, linewidth=2, labelcolor='black')
-            pylab.semilogx()
-            pylab.axis([min(wavelength_values), max(wavelength_values),
-                       min(flux_values), max(flux_values)])
-
-            pylab.hold(True)
-
-            pylab.legend()
-            pylab.savefig(new_directory + '/' + `int(x_values[0])` + '_' + 
+            ax.set_xlabel(r'Wavelength ($\mu$m)')					
+            ax.set_ylabel(r'Flux density (Jy/pixel)')
+            rc('axes', labelsize=14, linewidth=2, labelcolor='black')
+            ax.set_xscale('log')
+            ax.set_yscale('log')
+            ax.set_xlim(min(wavelength_values), max(wavelength_values)) #NOTETOSELF: doesn't quite seem to work
+            ax.set_ylim(min(flux_values), max(flux_values))
+            fig.savefig(new_directory + '/' + `int(x_values[0])` + '_' + 
                           `int(y_values[0])` + '_sed.eps')
-            #pylab.show()
             bar.update(i)
+    return
 
 def cleanup_output_files():
     """
@@ -727,7 +779,7 @@ def cleanup_output_files():
     for d in ('converted', 'registered', 'convolved', 'resampled', 'seds'):
         subdir = directory + '/' + d
         if (os.path.isdir(subdir)):
-            print("Removing " + subdir)
+            log.info("Removing " + subdir)
             shutil.rmtree(subdir)
 
 #if __name__ == '__main__':
@@ -800,9 +852,9 @@ def main(args=None):
         # things to it later on
         filename = os.path.splitext(hdulist.filename())[0]
         hdulist.close()
-        pixelscale = u.deg.to(u.arcsec, abs(float(header['CDELT1'])))
-        fov = u.deg.to(u.arcsec, abs(float(header['CDELT1']))) * float(header['NAXIS1'])
-        print("Checking: " + `pixelscale` + " < " + `ang_size` + " < " + `fov`)
+        pixelscale = get_pixel_scale(header)
+        fov = pixelscale * float(header['NAXIS1'])
+        log.info("Checking: is pixel scale (" + `pixelscale` + "\") <  ang_size (" + `ang_size` + "\") < FOV (" + `fov`+"\") ?")
         if (pixelscale < ang_size < fov):
             wavelength = header['WAVELNTH']
             header['WAVELNTH'] = (wavelength, 'micron')
@@ -810,7 +862,7 @@ def main(args=None):
             headers.append(header)
             filenames.append(filename)
         else:
-            print(filename + " does not meet the above criteria.")
+            warnings.warn("Image %s does not meet the above criteria." % filename, AstropyUserWarning) 
 
     # Sort the lists by their WAVELNTH value
     images_with_headers_unsorted = zip(image_data, headers, filenames)
