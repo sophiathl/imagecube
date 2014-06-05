@@ -163,14 +163,14 @@ def print_usage():
 
     print("""
 Usage: """ + sys.argv[0] + """ --dir <directory> --ang_size <angular_size>
-[--flux_conv] [--im_reg] [--im_ref <filename>] [--im_conv]
-[--fwhm <fwhm value>] [--kernels <kernel directory>] [--im_regrid] 
+[--flux_conv] [--im_reg] [--im_ref <filename>] [--rot_angle <number in degrees>] 
+[--im_conv] [--fwhm <fwhm value>] [--kernels <kernel directory>] [--im_regrid] 
 [--im_pixsc <number in arcsec>] [--seds] [--cleanup] [--help]  
 
 dir: the path to the directory containing the <input FITS files> to be 
 processed
 
-ang_size: the angular size of the output image cube in arcsec
+ang_size: the field of view of the output image cube in arcsec
 
 flux_conv: perform unit conversion to Jy/pixel for all images not already
 in these units.
@@ -183,8 +183,12 @@ im_reg: register the input images to the reference image. The user should
 provide the reference image with the im_ref parameter.
 
 im_ref: user-provided reference image to which the other images are registered. 
-In the header, the  following keywords should be present: CRVAL1, CRVAL2, which 
-give the RA and DEC to which the images will be registered using im_reg.
+This image must have a valid world coordinate system. The position angle of
+thie image will be used for the final registered images, unless an
+angle is explicitly set using --rot_angle.
+
+rot_angle: position angle (in degrees East of North) for the registered images.
+If omitted, the PA of the reference image is used.
 
 im_conv: perform convolution to a common resolution, using either a Gaussian or
 a PSF kernel. For Gaussian kernels, the angular resolution is specified with the fwhm 
@@ -225,10 +229,6 @@ NOTE: the following keywords must be present in all images, along with a
 comment containing the units (where applicable), for optimal image processing:
 
     BUNIT: the physical units of the array values (i.e. the flux unit).
-    CRVAL1: the RA (in degrees) to which the images will be registered by im_reg
-    CRVAL2: the DEC (in degrees) to which the images will be registered by im_reg
-    CDELT1: the pixel scale (in degrees) along the x-axis
-    CDELT2: the pixel scale (in degrees) along the y-axis (not used)
     FLSCALE: the factor that converts the native flux units (as given
              in the BUNIT keyword) to Jy/pixel. The units of this factor should
              be: (Jy/pixel) / (BUNIT unit). This keyword should be added in the
@@ -237,11 +237,19 @@ comment containing the units (where applicable), for optimal image processing:
     INSTRUME: the name of the instrument used
     WAVELNTH: the representative wavelength (in micrometres) of the filter 
               bandpass
-If any of these keywords are missing, imagecube will attempt to determine them 
-as best as possible. The calculated values will be present in the headers of 
-the output images; if they are not the desired values, please check the headers
+Keywords which constitute a valid world coordinate system must also be present.
+
+If any of these keywords are missing, imagecube will attempt to determine them.
+The calculated values will be present in the headers of the output images; 
+if they are not the desired values, please check the headers
 of your input images and make sure that these values are present.
     """)
+
+#    CRVAL1: the RA (in degrees) to which the images will be registered by im_reg
+#    CRVAL2: the DEC (in degrees) to which the images will be registered by im_reg
+#    CDELT1: the pixel scale (in degrees) along the x-axis
+#    CDELT2: the pixel scale (in degrees) along the y-axis (not used)
+
 
 def parse_command_line():
     """
@@ -261,12 +269,13 @@ def parse_command_line():
     global fwhm_input
     global kernel_directory
     global im_pixsc
+    global rot_angle
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], "", ["dir=", "ang_size=",
                                    "flux_conv", "im_conv", "im_reg", "im_ref=",
-                                   "im_conv", "fwhm=", "kernels=", "im_pixsc=",
-                                   "im_regrid", "seds", "cleanup", "help"])
+                                   "rot_angle=", "im_conv", "fwhm=", "kernels=", 
+                                   "im_pixsc=","im_regrid", "seds", "cleanup", "help"])
     except getopt.GetoptError, exc:
         print(exc.msg)
         print("An error occurred. Check your parameters and try again.")
@@ -286,6 +295,8 @@ def parse_command_line():
             do_conversion = True
         elif opt in ("--im_reg"):
             do_registration = True
+        elif opt in ("--rot_angle"):
+            rot_angle = float(arg)
         elif opt in ("--im_conv"):
             do_convolution = True
         elif opt in ("--im_regrid"):
@@ -461,6 +472,27 @@ def get_pixel_scale(header):
     pix_scale = abs(scale[0]) * u.deg.to(u.arcsec)
     return(pix_scale)
 
+def get_pangle(header):
+    '''
+    Compute the rotation angle, in degrees,  from an image WCS
+    Assumes WCS is in degrees (TODO: generalize)
+
+    Parameters
+    ----------
+    header: FITS header of image
+
+
+    '''
+    try:
+        if 'CROTA2' in header.keys(): # use the CROTA2 kw if present
+            return(float(header['CROTA2']))
+        else: # use the CD matrix
+            cr2 = math.atan2(header['CD1_2'],header['CD2_2'])*u.radian.to(u.deg)
+            return(cr2)
+    except KeyError:
+        warnings.warn('No PA angle information found!')
+        return(0.0)
+
 def merge_headers(montage_hfile, orig_header, out_file):
     '''
     Merges an original image header with the WCS info
@@ -499,6 +531,12 @@ def register_images(images_with_headers):
     lngref_input = hdr['CRVAL1']
     latref_input = hdr['CRVAL2']
     width_and_height = u.arcsec.to(u.deg, ang_size)
+    try:
+        rotation_pa = rot_angle # the user-input PA
+    except NameError: # user didn't define it
+        log.info('Getting position angle from %s' % main_reference_image)
+        rotation_pa = get_pangle(hdr)
+    log.info('Using PA of %.1f degrees' % rotation_pa)
 
     for i in range(0, len(images_with_headers)):
 
@@ -521,7 +559,7 @@ def register_images(images_with_headers):
                               width_and_height, artificial_filename, 
                               system='eq', equinox=2000.0, 
                               height=width_and_height, 
-                              pix_size=native_pixelscale, rotation=0.)
+                              pix_size=native_pixelscale, rotation=rotation_pa)
         merge_headers(artificial_filename, images_with_headers[i][1], artificial_filename)
         montage.wrappers.reproject(input_filename, registered_filename, 
                                    header=artificial_filename, exact_size=True)  
@@ -665,6 +703,12 @@ def resample_images(images_with_headers):
     hdr = fits.getheader(main_reference_image, 0)
     lngref_input = hdr['CRVAL1']
     latref_input = hdr['CRVAL2']
+    try:
+        rotation_pa = rot_angle # the user-input PA
+    except NameError: # user didn't define it
+        log.info('Getting position angle from %s' % main_reference_image)
+        rotation_pa = get_pangle(hdr)
+    log.info('Using PA of %.1f degrees' % rotation_pa)
 
     montage.commands.mHdr(`lngref_input` + ' ' + `latref_input`, width_input, 
                           'grid_final_resample_header', system='eq', 
@@ -854,7 +898,7 @@ def main(args=None):
         hdulist.close()
         pixelscale = get_pixel_scale(header)
         fov = pixelscale * float(header['NAXIS1'])
-        log.info("Checking: is pixel scale (" + `pixelscale` + "\") <  ang_size (" + `ang_size` + "\") < FOV (" + `fov`+"\") ?")
+        log.info("Checking: is pixel scale (%.2f\") <  ang_size (%.2f\") < FOV (%.2f\") ?"% (pixelscale, ang_size,fov))
         if (pixelscale < ang_size < fov):
             wavelength = header['WAVELNTH']
             header['WAVELNTH'] = (wavelength, 'micron')
