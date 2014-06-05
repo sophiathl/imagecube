@@ -18,6 +18,7 @@ import glob
 import math
 import os
 import warnings
+import shutil
 
 from astropy import units as u
 from astropy import constants
@@ -44,7 +45,7 @@ Some explanation of where this value comes from is needed.
 
 """
 
-MJY_PER_SR_TO_JY_PER_ARCSEC2 = 2.3504 * 10**(-5)
+MJY_PER_SR_TO_JY_PER_ARCSEC2 = u.MJy.to(u.Jy)/u.sr.to(u.arcsec**2)
 """
 Code constant: MJY_PER_SR_TO_JY_PER_ARCSEC2
 
@@ -121,7 +122,6 @@ Representative wavelength (in micron) for the 2MASS Ks filter
 
 """
 
-#JY_CONVERSION = 10**23
 JY_CONVERSION = u.Jy.to(u.erg / u.cm**2 / u.s / u.Hz, 1., 
                         equivalencies=u.spectral_density(u.AA, 1500))  ** -1
 """
@@ -242,13 +242,8 @@ Keywords which constitute a valid world coordinate system must also be present.
 If any of these keywords are missing, imagecube will attempt to determine them.
 The calculated values will be present in the headers of the output images; 
 if they are not the desired values, please check the headers
-of your input images and make sure that these values are present.
+of your input images and try again.
     """)
-
-#    CRVAL1: the RA (in degrees) to which the images will be registered by im_reg
-#    CRVAL2: the DEC (in degrees) to which the images will be registered by im_reg
-#    CDELT1: the pixel scale (in degrees) along the x-axis
-#    CDELT2: the pixel scale (in degrees) along the y-axis (not used)
 
 
 def parse_command_line():
@@ -271,6 +266,7 @@ def parse_command_line():
     global im_pixsc
     global rot_angle
 
+##TODO: switch over to argparse
     try:
         opts, args = getopt.getopt(sys.argv[1:], "", ["dir=", "ang_size=",
                                    "flux_conv", "im_conv", "im_reg", "im_ref=",
@@ -383,7 +379,7 @@ def get_conversion_factor(header, instrument):
 
     elif (instrument == 'PACS'):
         # Confirm that the data is already in Jy/pixel by checking the BUNIT 
-        # header# keyword
+        # header keyword
         if ('BUNIT' in header):
             if (header['BUNIT'].lower() != 'jy/pixel'):
                 log.info("Instrument is PACS, but Jy/pixel is not being used in "
@@ -419,19 +415,22 @@ def convert_images(images_with_headers):
         if ('FLSCALE' in images_with_headers[i][1]):
             conversion_factor = float(images_with_headers[i][1]['FLSCALE'])
         else:
-            try:
+            try: # try to get conversion factor from image header
                 instrument = images_with_headers[i][1]['INSTRUME']
                 conversion_factor = get_conversion_factor(
                     images_with_headers[i][1], instrument)
-            except KeyError:
+            except KeyError: # get this if no 'INSTRUME' keyword
                 conversion_factor = 0
-            if conversion_factor == 0:
+            # if conversion_factor == 0 either we don't know the instrument
+            # or we don't have a conversion factor for it.
+            if conversion_factor == 0: 
                 warnings.warn("No conversion factor for image %s, using 1"\
                      % images_with_headers[i][2],\
                     AstropyUserWarning)
                 conversion_factor = 1.0
 
         # Some manipulation of filenames and directories
+        # NOTETOSELF: this code is repeated elsewhere in file, should fix
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
         new_directory = original_directory + "/converted/"
@@ -488,9 +487,9 @@ def get_pangle(header):
             return(float(header['CROTA2']))
         else: # use the CD matrix
             cr2 = math.atan2(header['CD1_2'],header['CD2_2'])*u.radian.to(u.deg)
-            return(cr2)
+            return(cr2) # NOTETOSELF: check that the sign is correct!
     except KeyError:
-        warnings.warn('No PA angle information found!')
+        warnings.warn('No PA information found!')
         return(0.0)
 
 def merge_headers(montage_hfile, orig_header, out_file):
@@ -526,7 +525,8 @@ def register_images(images_with_headers):
         images.
 
     """
-
+    # get WCS info for the reference image
+    # NOTETOSELF: some of this code is repeated in im_regrid
     hdr = fits.getheader(main_reference_image, 0)
     lngref_input = hdr['CRVAL1']
     latref_input = hdr['CRVAL2']
@@ -538,6 +538,8 @@ def register_images(images_with_headers):
         rotation_pa = get_pangle(hdr)
     log.info('Using PA of %.1f degrees' % rotation_pa)
 
+    # now loop over all the images
+    # NOTETOSELF: repeated code
     for i in range(0, len(images_with_headers)):
 
         native_pixelscale = get_pixel_scale(images_with_headers[i][1])
@@ -555,15 +557,17 @@ def register_images(images_with_headers):
         if not os.path.exists(new_directory):
             os.makedirs(new_directory)
 
+        # make the new header & merge it with old
         montage.commands.mHdr(`lngref_input` + ' ' + `latref_input`, 
                               width_and_height, artificial_filename, 
                               system='eq', equinox=2000.0, 
                               height=width_and_height, 
                               pix_size=native_pixelscale, rotation=rotation_pa)
         merge_headers(artificial_filename, images_with_headers[i][1], artificial_filename)
+        # reproject using montage
         montage.wrappers.reproject(input_filename, registered_filename, 
                                    header=artificial_filename, exact_size=True)  
-
+        # delete the file with header info
         os.unlink(artificial_filename)
     return
 
@@ -581,7 +585,7 @@ def convolve_images(images_with_headers):
     """
 
     for i in range(0, len(images_with_headers)):
-
+        # NOTETOSELF: repeated code
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
         new_directory = original_directory + "/convolved/"
@@ -595,32 +599,28 @@ def convolve_images(images_with_headers):
 
         # Check if there is a corresponding PSF kernel.
         # If so, then use that to perform the convolution.
-        # Otherwise, we convolve with a Gaussian kernel.
+        # Otherwise, convolve with a Gaussian kernel.
         kernel_filename = (original_directory + "/" + kernel_directory + "/" + 
                            original_filename + "_kernel.fits")
         log.info("Looking for " + kernel_filename)
 
-        #if use_kernels and os.path.exists(kernel_filename):
         if os.path.exists(kernel_filename):
             log.info("Found a kernel; will convolve with it shortly.")
-            #reading the science image:
-            #science_image = fits.getdata(input_filename)
+            #reading the science image
             science_hdulist = fits.open(input_filename)
             science_header = science_hdulist[0].header
             science_image = science_hdulist[0].data
             science_hdulist.close()
             # reading the kernel
-            #kernel_image = fits.getdata(kernel_filename)
             kernel_hdulist = fits.open(kernel_filename)
             kernel_image = kernel_hdulist[0].data
             kernel_hdulist.close()
-
+            # do the convolution and save as a new .fits file
             convolved_image = convolve_fft(science_image, kernel_image)
             hdu = fits.PrimaryHDU(convolved_image, science_header)
             hdu.writeto(convolved_filename, clobber=True)
-            #fits.writeto(convolved_filename, convolved_image, clobber=True)
 
-        else:
+        else: # no kernel
             native_pixelscale = get_pixel_scale(images_with_headers[i][1])
             sigma_input = (fwhm_input / 
                            (2* math.sqrt(2*math.log (2) ) * native_pixelscale))
@@ -636,13 +636,13 @@ def convolve_images(images_with_headers):
             hdulist.close()
             # NOTETOSELF: not completely clear whether Gaussian2DKernel 'width' is sigma or FWHM
             # also, previous version had kernel being 3x3 pixels which seems pretty small!
-            gaus_kernel_inp = Gaussian2DKernel(width=sigma_input)
 
+            # construct kernel
+            gaus_kernel_inp = Gaussian2DKernel(width=sigma_input)
             # Do the convolution and save it as a new .fits file
             conv_result = convolve(image_data, gaus_kernel_inp)
             header['FWHM'] = (fwhm_input, 
                               'FWHM value used in convolution, in pixels')
-
             hdu = fits.PrimaryHDU(conv_result, header)
             hdu.writeto(convolved_filename, clobber=True)
     return
@@ -669,6 +669,7 @@ def create_data_cube(images_with_headers):
     if not os.path.exists(new_directory):
         os.makedirs(new_directory)
 
+    # NOTETOSELF: repeated code
     for i in range(0, len(images_with_headers)):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
@@ -682,6 +683,8 @@ def create_data_cube(images_with_headers):
         resampled_images.append(image)
         hdulist.close()
 
+    # NOTETOSELF: why are we making a copy of resampled images?
+    # also need to fix header thing, then remove comment above
     fits.writeto(new_directory + '/' + 'datacube.fits', np.copy(resampled_images), resampled_headers[0], clobber=True)
     return
 
@@ -697,9 +700,11 @@ def resample_images(images_with_headers):
 
     """
 
+    # figure out the geometry of the resampled images
     width_input = ang_size / (im_pixsc) 
     height_input = width_input
 
+    # NOTETOSELF: repeated code
     hdr = fits.getheader(main_reference_image, 0)
     lngref_input = hdr['CRVAL1']
     latref_input = hdr['CRVAL2']
@@ -710,11 +715,13 @@ def resample_images(images_with_headers):
         rotation_pa = get_pangle(hdr)
     log.info('Using PA of %.1f degrees' % rotation_pa)
 
+    # make the header for the resampled images (same for all)
     montage.commands.mHdr(`lngref_input` + ' ' + `latref_input`, width_input, 
                           'grid_final_resample_header', system='eq', 
                           equinox=2000.0, height=height_input, 
                           pix_size=im_pixsc, rotation=0.)
 
+    # NOTETOSELF: repeated code
     for i in range(0, len(images_with_headers)):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
@@ -726,11 +733,14 @@ def resample_images(images_with_headers):
         input_directory = original_directory + "/convolved/"
         input_filename = (input_directory + original_filename  + 
                           "_convolved.fits")
-        if not os.path.exists(new_directory):
+        if not os.path.exists(new_directory): # NOTETOSELF: don't need to do this once per image
             os.makedirs(new_directory)
+        # generate header for regridded image
         merge_headers('grid_final_resample_header', images_with_headers[i][1],artificial_header)
+        # do the regrid
         montage.wrappers.reproject(input_filename, resampled_filename, 
             header=artificial_header)  
+        # delete the header file
         os.unlink(artificial_header)
 
     os.unlink('grid_final_resample_header')
@@ -754,6 +764,7 @@ def output_seds(images_with_headers):
 
     num_wavelengths = len(images_with_headers)
 
+    # NOTETOSELF: repeated code
     for i in range(0, num_wavelengths):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
@@ -781,6 +792,8 @@ def output_seds(images_with_headers):
                 sed_data.append((int(j), int(k), wavelengths[i], 
                                 all_image_data[i][j][k]))
 
+    # write the SED data to a test file
+    # NOTETOSELF: possibly get rid of this?
     data = np.copy(sorted(sed_data))
     np.savetxt('test.out', data, fmt='%f,%f,%f,%f', 
                header='x, y, wavelength (um), flux units (Jy/pixel)')
@@ -792,11 +805,13 @@ def output_seds(images_with_headers):
             # change to the desired fonts
             rc('font', family='Times New Roman')
             rc('text', usetex=True)
+            # grab the data from the cube
             wavelength_values = data[:,2][i*num_wavelengths:(i+1)*
                                 num_wavelengths]
             flux_values = data[:,3][i*num_wavelengths:(i+1)*num_wavelengths]
-            x_values = data[:,0][i*num_wavelengths:(i+1)*num_wavelengths]
-            y_values = data[:,1][i*num_wavelengths:(i+1)*num_wavelengths]
+            # NOTETOSELF: change from 0-index to 1-index
+            x_values = data[:,0][i*num_wavelengths:(i+1)*num_wavelengths] # pixel pos
+            y_values = data[:,1][i*num_wavelengths:(i+1)*num_wavelengths] # pixel pos
             fig, ax = plt.subplots()
             ax.scatter(wavelength_values,flux_values)
             # axes specific
@@ -818,8 +833,6 @@ def cleanup_output_files():
     script.
     """
 
-    import shutil
-
     for d in ('converted', 'registered', 'convolved', 'resampled', 'seds'):
         subdir = directory + '/' + d
         if (os.path.isdir(subdir)):
@@ -840,6 +853,7 @@ def main(args=None):
     global do_cleanup
     global kernel_directory
     global im_pixsc
+    global rot_angle
     ang_size = ''
     directory = ''
     main_reference_image = ''
@@ -854,6 +868,7 @@ def main(args=None):
     im_pixsc = ''
 
     parse_command_line()
+    #NOTETOSELF: need a log file which records the command-line params
 
     if (do_cleanup):
         cleanup_output_files()
