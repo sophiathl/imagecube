@@ -20,6 +20,7 @@ import os
 import warnings
 import shutil
 
+from datetime import datetime
 from astropy import units as u
 from astropy import constants
 from astropy.io import fits
@@ -868,11 +869,18 @@ def main(args=None):
     im_pixsc = ''
 
     parse_command_line()
-    #NOTETOSELF: need a log file which records the command-line params
+    start_time = datetime.now()
 
     if (do_cleanup):
         cleanup_output_files()
         sys.exit()
+
+    # if not just cleaning up, make a log file which records input parameters
+    logfile_name = 'imagecube_'+ start_time.strftime('%Y-%m-%d_%H%M%S') + '.log'
+    logf = open(logfile_name, 'w')
+    logf.write(start_time.strftime('%Y-%m-%d_%H%M%S'))
+    logf.write(': imagecube called with arguments %s' % sys.argv[1:])
+    logf.close()
 
     # Grab all of the .fits and .fit files in the specified directory
     all_files = glob.glob(directory + "/*.fit*")
