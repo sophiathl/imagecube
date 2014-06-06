@@ -169,7 +169,8 @@ Usage: """ + sys.argv[0] + """ --dir <directory> --ang_size <angular_size>
 [--im_pixsc <number in arcsec>] [--seds] [--cleanup] [--help]  
 
 dir: the path to the directory containing the <input FITS files> to be 
-processed
+processed. For multi-extension FITS files, currently only the first extension
+after the primary one is used.
 
 ang_size: the field of view of the output image cube in arcsec
 
@@ -521,6 +522,20 @@ def merge_headers(montage_hfile, orig_header, out_file):
     orig_header.tofile(out_file,sep='\n',endcard=True,padding=False,clobber=True)
     return
 
+def get_ref_wcs(img_name):
+    hdulist = fits.open(img_name)
+    hdr = hdulist[find_image_planes(hdulist)[0]].header #take the first sci image if multi-ext.
+    lngref_input = hdr['CRVAL1']
+    latref_input = hdr['CRVAL2']
+    try:
+        rotation_pa = rot_angle # the user-input PA
+    except NameError: # user didn't define it
+        log.info('Getting position angle from %s' % main_reference_image)
+        rotation_pa = get_pangle(hdr)
+    log.info('Using PA of %.1f degrees' % rotation_pa)
+    hdulist.close()
+    return(lngref_input, latref_input, rotation_pa)
+
 def register_images(images_with_headers):
     """
     Registers all of the images to a common WCS
@@ -533,19 +548,8 @@ def register_images(images_with_headers):
 
     """
     # get WCS info for the reference image
-    # NOTETOSELF: some of this code is repeated in im_regrid
-    hdulist = fits.open(main_reference_image)
-    hdr = hdulist[find_image_planes(hdulist)[0]].header #take the first sci image if multi-ext.
-    lngref_input = hdr['CRVAL1']
-    latref_input = hdr['CRVAL2']
+    lngref_input, latref_input, rotation_pa = get_ref_wcs(main_reference_image)
     width_and_height = u.arcsec.to(u.deg, ang_size)
-    try:
-        rotation_pa = rot_angle # the user-input PA
-    except NameError: # user didn't define it
-        log.info('Getting position angle from %s' % main_reference_image)
-        rotation_pa = get_pangle(hdr)
-    log.info('Using PA of %.1f degrees' % rotation_pa)
-    hdulist.close()
 
     # now loop over all the images
     # NOTETOSELF: repeated code
@@ -692,7 +696,7 @@ def create_data_cube(images_with_headers):
         resampled_images.append(image)
         hdulist.close()
 
-    # NOTETOSELF: why are we making a copy of resampled images?
+    # SOPHIA: why are we making a copy of resampled images?
     # also need to fix header thing, then remove comment above
     fits.writeto(new_directory + '/' + 'datacube.fits', np.copy(resampled_images), resampled_headers[0], clobber=True)
     return
@@ -713,16 +717,8 @@ def resample_images(images_with_headers):
     width_input = ang_size / (im_pixsc) 
     height_input = width_input
 
-    # NOTETOSELF: repeated code
-    hdr = fits.getheader(main_reference_image, 0)
-    lngref_input = hdr['CRVAL1']
-    latref_input = hdr['CRVAL2']
-    try:
-        rotation_pa = rot_angle # the user-input PA
-    except NameError: # user didn't define it
-        log.info('Getting position angle from %s' % main_reference_image)
-        rotation_pa = get_pangle(hdr)
-    log.info('Using PA of %.1f degrees' % rotation_pa)
+    # get WCS info for the reference image
+    lngref_input, latref_input, rotation_pa = get_ref_wcs(main_reference_image)
 
     # make the header for the resampled images (same for all)
     montage.commands.mHdr(`lngref_input` + ' ' + `latref_input`, width_input, 
