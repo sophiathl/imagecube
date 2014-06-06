@@ -320,7 +320,8 @@ def parse_command_line():
             with open(main_reference_image): pass
         except IOError:
             print("The file " + main_reference_image + 
-                  " could not be found in the directory " + directory)
+                  " could not be found in the directory " + directory +
+                  ". Cannot run without reference image, exiting.")
             sys.exit()
     return
 
@@ -533,7 +534,8 @@ def register_images(images_with_headers):
     """
     # get WCS info for the reference image
     # NOTETOSELF: some of this code is repeated in im_regrid
-    hdr = fits.getheader(main_reference_image, 0)
+    hdulist = fits.open(main_reference_image)
+    hdr = hdulist[find_image_planes(hdulist)[0]].header #take the first sci image if multi-ext.
     lngref_input = hdr['CRVAL1']
     latref_input = hdr['CRVAL2']
     width_and_height = u.arcsec.to(u.deg, ang_size)
@@ -543,6 +545,7 @@ def register_images(images_with_headers):
         log.info('Getting position angle from %s' % main_reference_image)
         rotation_pa = get_pangle(hdr)
     log.info('Using PA of %.1f degrees' % rotation_pa)
+    hdulist.close()
 
     # now loop over all the images
     # NOTETOSELF: repeated code
@@ -847,7 +850,7 @@ def cleanup_output_files():
 
 def find_image_planes(hdulist):
     """
-    Reads FITS hdulist to figure out which
+    Reads FITS hdulist to figure out which ones contain science data
 
     Parameters
     ----------
@@ -932,8 +935,8 @@ def main(args=None):
     headers = []
     filenames = []
 
-    for i in all_files:
-        hdulist = fits.open(i)
+    for (i,fitsfile) in enumerate(all_files):
+        hdulist = fits.open(fitsfile)
         img_extens = find_image_planes(hdulist)
         # NOTETOSELF: right now we are just using the *first* image extension in a file
         #             which is not what we want to do, ultimately.
@@ -948,7 +951,7 @@ def main(args=None):
         #             want separate loop over image planes, after finishing file loop
         pixelscale = get_pixel_scale(header)
         fov = pixelscale * float(header['NAXIS1'])
-        log.info("Checking: is pixel scale (%.2f\") <  ang_size (%.2f\") < FOV (%.2f\") ?"% (pixelscale, ang_size,fov))
+        log.info("Checking %s: is pixel scale (%.2f\") < ang_size (%.2f\") < FOV (%.2f\") ?"% (fitsfile,pixelscale, ang_size,fov))
         if (pixelscale < ang_size < fov):
             try:
                 wavelength = header['WAVELNTH'] 
