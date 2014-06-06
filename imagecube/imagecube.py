@@ -433,7 +433,7 @@ def convert_images(images_with_headers):
                 conversion_factor = 1.0
 
         # Some manipulation of filenames and directories
-        # NOTETOSELF: this code is repeated elsewhere in file, should fix
+        # NOTETOSELF: repeated code
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
         new_directory = original_directory + "/converted/"
@@ -808,7 +808,7 @@ def output_seds(images_with_headers):
                                 all_image_data[i][j][k]))
 
     # write the SED data to a test file
-    # NOTETOSELF: possibly get rid of this?
+    # NOTETOSELF: make this optional?
     data = np.copy(sorted(sed_data))
     np.savetxt('test.out', data, fmt='%f,%f,%f,%f', 
                header='x, y, wavelength (um), flux units (Jy/pixel)')
