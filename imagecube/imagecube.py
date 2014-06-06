@@ -660,48 +660,8 @@ def convolve_images(images_with_headers):
             hdu.writeto(convolved_filename, clobber=True)
     return
 
-def create_data_cube(images_with_headers):
-    """
-    Creates a data cube from the provided images.
 
-    Parameters
-    ----------
-    images_with_headers: zipped list structure
-        A structure containing headers and image data for all FITS input
-        images.
-
-    Notes
-    -----
-    Currently we are just using the header of the first input image.
-    This should be changed to something more appropriate.
-    """
-    resampled_images = []
-    resampled_headers = []
-
-    new_directory = directory + "/datacube/"
-    if not os.path.exists(new_directory):
-        os.makedirs(new_directory)
-
-    # NOTETOSELF: repeated code
-    for i in range(0, len(images_with_headers)):
-        original_filename = os.path.basename(images_with_headers[i][2])
-        original_directory = os.path.dirname(images_with_headers[i][2])
-        resampled_filename = (original_directory + "/resampled/" + 
-                              original_filename  + "_resampled.fits")
-
-        hdulist = fits.open(resampled_filename)
-        header = hdulist[0].header
-        resampled_headers.append(header)
-        image = hdulist[0].data
-        resampled_images.append(image)
-        hdulist.close()
-
-    # SOPHIA: why are we making a copy of resampled images?
-    # also need to fix header thing, then remove comment above
-    fits.writeto(new_directory + '/' + 'datacube.fits', np.copy(resampled_images), resampled_headers[0], clobber=True)
-    return
-
-def resample_images(images_with_headers):
+def resample_images(images_with_headers, logfile_name):
     """
     Resamples all of the images to a common pixel grid.
 
@@ -748,9 +708,59 @@ def resample_images(images_with_headers):
         # delete the header file
         os.unlink(artificial_header)
 
+    create_data_cube(images_with_headers, logfile_name, 'grid_final_resample_header')
     os.unlink('grid_final_resample_header')
-    create_data_cube(images_with_headers)
     return
+
+def create_data_cube(images_with_headers, logfile_name, header_text):
+    """
+    Creates a data cube from the provided images.
+
+    Parameters
+    ----------
+    images_with_headers: zipped list structure
+        A structure containing headers and image data for all FITS input
+        images.
+
+    """
+
+    new_directory = directory + "/datacube/"
+    if not os.path.exists(new_directory):
+        os.makedirs(new_directory)
+
+    # make a new header
+    prihdr = fits.Header()
+    # put some information in it
+    prihdr['CREATOR'] = 'IMAGECUBE'
+    prihdr['DATE'] = datetime.now().strftime('%Y-%m-%d')
+    prihdr['LOGFILE'] = logfile_name 
+    if do_conversion:
+        prihdr['BUNIT'] = ('Jy/pixel', 'Units of image data')
+    # add the WCS info from the regridding stage
+    # TODO: deal with case where this hasn't been done
+    wcs_header = fits.Header.fromtextfile(header_text)
+    for key in wcs_header.keys():
+        if key not in prihdr.keys():
+            prihdr[key] = wcs_header[key] 
+    
+    # now use this header to create a new fits file
+    prihdu = fits.PrimaryHDU(header=prihdr)
+    cube_hdulist = fits.HDUList([prihdu])
+
+    # NOTETOSELF: repeated code
+    for i in range(0, len(images_with_headers)):
+        original_filename = os.path.basename(images_with_headers[i][2])
+        original_directory = os.path.dirname(images_with_headers[i][2])
+        resampled_filename = (original_directory + "/resampled/" + 
+                              original_filename  + "_resampled.fits")
+        
+        hdulist = fits.open(resampled_filename)
+        cube_hdulist.append(hdulist[0])
+        hdulist.close()
+
+    cube_hdulist.writeto(new_directory + '/' + 'datacube.fits',clobber=True)
+    return
+
 
 def output_seds(images_with_headers):
     """
@@ -975,7 +985,7 @@ def main(args=None):
         convolve_images(images_with_headers)
 
     if (do_resampling):
-        resample_images(images_with_headers)
+        resample_images(images_with_headers, logfile_name)
 
     if (do_seds):
         output_seds(images_with_headers)
