@@ -255,7 +255,7 @@ def parse_command_line():
     """
 
     global ang_size
-    global directory
+    global image_directory
     global do_conversion
     global do_registration
     global do_convolution
@@ -285,9 +285,9 @@ def parse_command_line():
         elif opt in ("--ang_size"):
             ang_size = float(arg)
         elif opt in ("--dir"):
-            directory = arg
-            if (not os.path.isdir(directory)):
-                print("Error: The directory cannot be found: " + directory)
+            image_directory = arg
+            if (not os.path.isdir(image_directory)):
+                print("Error: The directory cannot be found: " + image_directory)
                 sys.exit()
         elif opt in ("--flux_conv"):
             do_conversion = True
@@ -321,7 +321,7 @@ def parse_command_line():
             with open(main_reference_image): pass
         except IOError:
             print("The file " + main_reference_image + 
-                  " could not be found in the directory " + directory +
+                  " could not be found in the directory " + image_directory +
                   ". Cannot run without reference image, exiting.")
             sys.exit()
     return
@@ -413,6 +413,10 @@ def convert_images(images_with_headers):
         images.
 
     """
+    # make new directory for output, if needed
+    new_directory = image_directory + "/converted/"
+    if not os.path.exists(new_directory):
+        os.makedirs(new_directory)
 
     for i in range(0, len(images_with_headers)):
         if ('FLSCALE' in images_with_headers[i][1]):
@@ -436,11 +440,8 @@ def convert_images(images_with_headers):
         # NOTETOSELF: repeated code
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
-        new_directory = original_directory + "/converted/"
         converted_filename = (new_directory + original_filename  + 
                               "_converted.fits")
-        if not os.path.exists(new_directory):
-            os.makedirs(new_directory)
 
         # Do a Jy/pixel unit conversion and save it as a new .fits file
         converted_data_array = images_with_headers[i][0] * conversion_factor
@@ -523,6 +524,16 @@ def merge_headers(montage_hfile, orig_header, out_file):
     return
 
 def get_ref_wcs(img_name):
+    '''
+    get WCS parameters from first science extension
+    (or primary extension if there is only one) of image
+
+    Parameters
+    ----------
+    img_name: name of FITS image file
+
+
+    '''
     hdulist = fits.open(img_name)
     hdr = hdulist[find_image_planes(hdulist)[0]].header #take the first sci image if multi-ext.
     lngref_input = hdr['CRVAL1']
@@ -536,6 +547,33 @@ def get_ref_wcs(img_name):
     hdulist.close()
     return(lngref_input, latref_input, rotation_pa)
 
+def find_image_planes(hdulist):
+    """
+    Reads FITS hdulist to figure out which ones contain science data
+
+    Parameters
+    ----------
+    hdulist: FITS hdulist
+
+    Outputs
+    -------
+    img_plns: list of which indices in hdulist correspond to science data
+
+    """
+    n_hdu = len(hdulist)
+    img_plns = []
+    if n_hdu == 1: # if there is only one extension, then use that
+        img_plns.append(0)
+    else: # loop over all the extensions & try to find the right ones
+        for extn in range(1,n_hdu):
+            try: # look for 'EXTNAME' keyword, see if it's 'SCI'
+                if 'SCI' in hdulist[extn].header['EXTNAME']:
+                    img_plns.append(extn)
+            except KeyError: # no 'EXTNAME', just assume we want this extension
+                img_plns.append(extn)
+    return(img_plns)
+
+
 def register_images(images_with_headers):
     """
     Registers all of the images to a common WCS
@@ -547,6 +585,11 @@ def register_images(images_with_headers):
         images.
 
     """
+    # make new directory for output, if needed
+    new_directory = image_directory + "/registered/"
+    if not os.path.exists(new_directory):
+        os.makedirs(new_directory)
+
     # get WCS info for the reference image
     lngref_input, latref_input, rotation_pa = get_ref_wcs(main_reference_image)
     width_and_height = u.arcsec.to(u.deg, ang_size)
@@ -559,7 +602,6 @@ def register_images(images_with_headers):
 
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
-        new_directory = original_directory + "/registered/"
         artificial_filename = (new_directory + original_filename + 
                                "_pixelgrid_header")
         registered_filename = (new_directory + original_filename  + 
@@ -567,8 +609,6 @@ def register_images(images_with_headers):
         input_directory = original_directory + "/converted/"
         input_filename = (input_directory + original_filename  + 
                           "_converted.fits")
-        if not os.path.exists(new_directory):
-            os.makedirs(new_directory)
 
         # make the new header & merge it with old
         montage.commands.mHdr(`lngref_input` + ' ' + `latref_input`, 
@@ -596,19 +636,20 @@ def convolve_images(images_with_headers):
         images.
 
     """
+    # make new directory for output, if needed
+    new_directory = image_directory + "/convolved/"
+    if not os.path.exists(new_directory):
+        os.makedirs(new_directory)
 
     for i in range(0, len(images_with_headers)):
         # NOTETOSELF: repeated code
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
-        new_directory = original_directory + "/convolved/"
         convolved_filename = (new_directory + original_filename  + 
                               "_convolved.fits")
         input_directory = original_directory + "/registered/"
         input_filename = (input_directory + original_filename  + 
                           "_registered.fits")
-        if not os.path.exists(new_directory):
-            os.makedirs(new_directory)
 
         # Check if there is a corresponding PSF kernel.
         # If so, then use that to perform the convolution.
@@ -672,6 +713,10 @@ def resample_images(images_with_headers, logfile_name):
         images.
 
     """
+    # make new directory for output, if needed
+    new_directory = image_directory + "/resampled/"
+    if not os.path.exists(new_directory):
+        os.makedirs(new_directory)
 
     # figure out the geometry of the resampled images
     width_input = ang_size / (im_pixsc) 
@@ -690,7 +735,6 @@ def resample_images(images_with_headers, logfile_name):
     for i in range(0, len(images_with_headers)):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
-        new_directory = original_directory + "/resampled/"
         artificial_header = (new_directory + original_filename + 
                                "_artheader")
         resampled_filename = (new_directory + original_filename  + 
@@ -698,8 +742,6 @@ def resample_images(images_with_headers, logfile_name):
         input_directory = original_directory + "/convolved/"
         input_filename = (input_directory + original_filename  + 
                           "_convolved.fits")
-        if not os.path.exists(new_directory): # NOTETOSELF: don't need to do this once per image
-            os.makedirs(new_directory)
         # generate header for regridded image
         merge_headers('grid_final_resample_header', images_with_headers[i][1],artificial_header)
         # do the regrid
@@ -723,8 +765,8 @@ def create_data_cube(images_with_headers, logfile_name, header_text):
         images.
 
     """
-
-    new_directory = directory + "/datacube/"
+    # make new directory for output, if needed
+    new_directory = image_directory + "/datacube/"
     if not os.path.exists(new_directory):
         os.makedirs(new_directory)
 
@@ -773,6 +815,10 @@ def output_seds(images_with_headers):
         images.
 
     """
+    # make new directory for output, if needed
+    new_directory = image_directory + "/seds/"
+    if not os.path.exists(new_directory):
+        os.makedirs(new_directory)
 
     all_image_data = []
     wavelengths = []
@@ -783,14 +829,11 @@ def output_seds(images_with_headers):
     for i in range(0, num_wavelengths):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
-        new_directory = original_directory + "/seds/"
         input_directory = original_directory + "/resampled/"
         input_filename = (input_directory + original_filename  + 
                           "_resampled.fits")
         wavelength = images_with_headers[i][1]['WAVELNTH']
         wavelengths.append(wavelength)
-        if not os.path.exists(new_directory):
-            os.makedirs(new_directory)
 
         # Load the data for each image and append it to a master list of
         # all image data.
@@ -849,41 +892,16 @@ def cleanup_output_files():
     """
 
     for d in ('converted', 'registered', 'convolved', 'resampled', 'seds'):
-        subdir = directory + '/' + d
+        subdir = image_directory + '/' + d
         if (os.path.isdir(subdir)):
             log.info("Removing " + subdir)
             shutil.rmtree(subdir)
 
-def find_image_planes(hdulist):
-    """
-    Reads FITS hdulist to figure out which ones contain science data
-
-    Parameters
-    ----------
-    hdulist: FITS hdulist
-
-    Outputs
-    -------
-    img_plns: list of which indices in hdulist correspond to science data
-
-    """
-    n_hdu = len(hdulist)
-    img_plns = []
-    if n_hdu == 1: # if there is only one extension, then use that
-        img_plns.append(0)
-    else: # loop over all the extensions & try to find the right ones
-        for extn in range(1,n_hdu):
-            try: # look for 'EXTNAME' keyword, see if it's 'SCI'
-                if 'SCI' in hdulist[extn].header['EXTNAME']:
-                    img_plns.append(extn)
-            except KeyError: # no 'EXTNAME', just assume we want this extension
-                img_plns.append(extn)
-    return(img_plns)
 
 #if __name__ == '__main__':
 def main(args=None):
     global ang_size
-    global directory
+    global image_directory
     global main_reference_image
     global fwhm_input
     global do_conversion
@@ -896,7 +914,7 @@ def main(args=None):
     global im_pixsc
     global rot_angle
     ang_size = ''
-    directory = ''
+    image_directory = ''
     main_reference_image = ''
     fwhm_input = ''
     do_conversion = False
@@ -923,7 +941,11 @@ def main(args=None):
     logf.close()
 
     # Grab all of the .fits and .fit files in the specified directory
-    all_files = glob.glob(directory + "/*.fit*")
+    all_files = glob.glob(image_directory + "/*.fit*")
+    # no use doing anything if there aren't any files!
+    if len(all_files) == 0:
+        warnings.warn('No fits found in directory' % image_directory, AstropyUserWarning )
+        sys.exit()
 
     # Lists to store information
     global image_data
