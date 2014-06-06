@@ -188,7 +188,7 @@ This image must have a valid world coordinate system. The position angle of
 thie image will be used for the final registered images, unless an
 angle is explicitly set using --rot_angle.
 
-rot_angle: position angle (in degrees East of North) for the registered images.
+rot_angle: position angle (+y axis, in degrees West of North) for the registered images.
 If omitted, the PA of the reference image is used.
 
 im_conv: perform convolution to a common resolution, using either a Gaussian or
@@ -511,7 +511,12 @@ def merge_headers(montage_hfile, orig_header, out_file):
     montage_header = fits.Header.fromtextfile(montage_hfile)
     for key in orig_header.keys():
         if key in montage_header.keys():
-            orig_header[key] = montage_header[key]
+            orig_header[key] = montage_header[key] # overwrite the original header WCS
+    if 'CD1_1' in orig_header.keys(): # if original header has CD matrix instead of CDELTs:
+        for cdm in ['CD1_1','CD1_2','CD2_1','CD2_2']: 
+            del orig_header[cdm] # delete the CD matrix
+        for cdp in ['CDELT1','CDELT2','CROTA2']: 
+            orig_header[cdp] = montage_header[cdp] # insert the CDELTs and CROTA2
     orig_header.tofile(out_file,sep='\n',endcard=True,padding=False,clobber=True)
     return
 
@@ -952,7 +957,7 @@ def main(args=None):
                 headers.append(header)
                 filenames.append(filename)
             except KeyError:
-                warnings.warn('Image %s has no WAVELNTH keyword, will not be used', filename, AstropyUserWarning)
+                warnings.warn('Image %s has no WAVELNTH keyword, will not be used' % filename, AstropyUserWarning)
         else:
             warnings.warn("Image %s does not meet the above criteria." % filename, AstropyUserWarning) 
 
