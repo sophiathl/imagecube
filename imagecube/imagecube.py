@@ -840,6 +840,32 @@ def cleanup_output_files():
             log.info("Removing " + subdir)
             shutil.rmtree(subdir)
 
+def find_image_planes(hdulist):
+    """
+    Reads FITS hdulist to figure out which
+
+    Parameters
+    ----------
+    hdulist: FITS hdulist
+
+    Outputs
+    -------
+    img_plns: list of which indices in hdulist correspond to science data
+
+    """
+    n_hdu = len(hdulist)
+    img_plns = []
+    if n_hdu == 1: # if there is only one extension, then use that
+        img_plns.append(0)
+    else: # loop over all the extensions & try to find the right ones
+        for extn in range(1,n_hdu):
+            try: # look for 'EXTNAME' keyword, see if it's 'SCI'
+                if 'SCI' in hdulist[extn].header['EXTNAME']:
+                    img_plns.append(extn)
+            except KeyError: # no 'EXTNAME', just assume we want this extension
+                img_plns.append(extn)
+    return(img_plns)
+
 #if __name__ == '__main__':
 def main(args=None):
     global ang_size
@@ -903,31 +929,30 @@ def main(args=None):
 
     for i in all_files:
         hdulist = fits.open(i)
-        header = hdulist[0].header
-        # NOTETOSELF: The check for a data cube needs to be another function
-        # due to complexity. Check the hdulist.info() values to see how much 
-        # information is contained in the file.  In a data cube, there may be 
-        # more than one usable science image. We need to make sure that they 
-        # are all grabbed.
-        # Check to see if the input file is a data cube before trying to grab 
-        # the image data.
-        if ('EXTEND' in header and 'DSETS___' in header):
-            image = hdulist[1].data
-        else:
-            image = hdulist[0].data
+        img_extens = find_image_planes(hdulist)
+        # NOTETOSELF: right now we are just using the *first* image extension in a file
+        #             which is not what we want to do, ultimately.
+        header = hdulist[img_extens[0]].header
+        image = hdulist[img_extens[0]].data
         # Strip the .fit or .fits extension from the filename so we can append
         # things to it later on
         filename = os.path.splitext(hdulist.filename())[0]
         hdulist.close()
+        # check to see if image has reasonable scale & orientation
+        # NOTETOSELF: should this really be here? It's not relevant for just flux conversion.
+        #             want separate loop over image planes, after finishing file loop
         pixelscale = get_pixel_scale(header)
         fov = pixelscale * float(header['NAXIS1'])
         log.info("Checking: is pixel scale (%.2f\") <  ang_size (%.2f\") < FOV (%.2f\") ?"% (pixelscale, ang_size,fov))
         if (pixelscale < ang_size < fov):
-            wavelength = header['WAVELNTH']
-            header['WAVELNTH'] = (wavelength, 'micron')
-            image_data.append(image)
-            headers.append(header)
-            filenames.append(filename)
+            try:
+                wavelength = header['WAVELNTH'] 
+                header['WAVELNTH'] = (wavelength, 'micron') # SOPHIA: why are we reading the keyword then setting it?
+                image_data.append(image)
+                headers.append(header)
+                filenames.append(filename)
+            except KeyError:
+                warnings.warn('Image %s has no WAVELNTH keyword, will not be used', filename, AstropyUserWarning)
         else:
             warnings.warn("Image %s does not meet the above criteria." % filename, AstropyUserWarning) 
 
