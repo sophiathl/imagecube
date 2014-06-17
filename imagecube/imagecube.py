@@ -437,7 +437,6 @@ def convert_images(images_with_headers):
                 conversion_factor = 1.0
 
         # Some manipulation of filenames and directories
-        # NOTETOSELF: repeated code
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
         converted_filename = (new_directory + original_filename  + 
@@ -595,7 +594,6 @@ def register_images(images_with_headers):
     width_and_height = u.arcsec.to(u.deg, ang_size)
 
     # now loop over all the images
-    # NOTETOSELF: repeated code
     for i in range(0, len(images_with_headers)):
 
         native_pixelscale = get_pixel_scale(images_with_headers[i][1])
@@ -642,7 +640,6 @@ def convolve_images(images_with_headers):
         os.makedirs(new_directory)
 
     for i in range(0, len(images_with_headers)):
-        # NOTETOSELF: repeated code
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
         convolved_filename = (new_directory + original_filename  + 
@@ -684,6 +681,9 @@ def convolve_images(images_with_headers):
             # in the header no longer means that there is any data in 
             # hdulist[1].data. I am using a workaround for now, but this needs
             # to be looked at.
+            # NOTE_FROM_PB: can possibly solve this issue, and eliminate a lot 
+            # of repetitive code, by making a multi-extension FITS file
+            # in the initial step, and iterating over the extensions in that file
             hdulist = fits.open(input_filename)
             header = hdulist[0].header
             image_data = hdulist[0].data
@@ -731,7 +731,6 @@ def resample_images(images_with_headers, logfile_name):
                           equinox=2000.0, height=height_input, 
                           pix_size=im_pixsc, rotation=0.)
 
-    # NOTETOSELF: repeated code
     for i in range(0, len(images_with_headers)):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
@@ -789,7 +788,6 @@ def create_data_cube(images_with_headers, logfile_name, header_text):
     prihdu = fits.PrimaryHDU(header=prihdr)
     cube_hdulist = fits.HDUList([prihdu])
 
-    # NOTETOSELF: repeated code
     for i in range(0, len(images_with_headers)):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
@@ -825,7 +823,6 @@ def output_seds(images_with_headers):
 
     num_wavelengths = len(images_with_headers)
 
-    # NOTETOSELF: repeated code
     for i in range(0, num_wavelengths):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
