@@ -11,27 +11,29 @@ from astropy.io import fits
 from astropy.tests.helper import pytest
 
 from .. import imagecube
+#from imagecube import *
 
-cdelt_val = 0.0066667
-crpix_val = 50.5
+# Values for fake header input
+cdelt_val = 0.0066667 # in degrees/pixel
+crpix_val = 50.5 
+cr1val_val = 10.5
+cr2val_val = -43.0
 
-class TestMosaic(object):
+class TestImagecube(object):
 
     def setup_class(self):
 
         # make a fake header to test the helper functions which access the header
         w = WCS(naxis=2)
-        lon = np.linspace(10., 11., 5)
-        lat = np.linspace(20., 21., 5)
 
         w.wcs.crpix = [crpix_val, crpix_val]
         w.wcs.cdelt = np.array([-cdelt_val, cdelt_val])
-        w.wcs.crval = [lon[i], lat[j]]
+        w.wcs.crval = [cr1val_val, cr2val_val]
         w.wcs.ctype = [b"RA---TAN", b"DEC--TAN"]
         w.wcs.crota = [0, np.random.uniform(0., 360.)]
 
-        header = w.to_header()
-
+        self.header = w.to_header()
+        self.crota = w.wcs.crota[1]
 
         # make a temporary directory for the input and output
         self.tmpdir = tempfile.mkdtemp()
@@ -47,14 +49,14 @@ class TestMosaic(object):
         shutil.rmtree(self.tmpdir)
 
     def test_helpers(self):
-        pixscal = get_pixel_scale(header)
-        assert pixscal == cdelt_val/3600.0
-        pa = get_pangle(header)
-        assert pa == w.wcs.crota
-        racen, deccen, crota = get_ref_wcs(header)
+        pixscal_deg = imagecube.get_pixel_scale(self.header)/3600.0
+        pa = imagecube.get_pangle(self.header)
+        assert pixscal_deg == cdelt_val
+        assert pa == self.crota
+        racen, deccen, crota = imagecube.get_ref_wcs(self.header)
         assert racen == crpix_val
         assert deccen == crpix_val
-        assert crot == w.wcs.crota
+        assert crot == self.crota
 
 #    @pytest.mark.xfail()  # results are not consistent on different machines -- what does this do?
 #    def test_imagecube(self):

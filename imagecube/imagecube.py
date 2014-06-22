@@ -69,7 +69,7 @@ NUV_LAMBDA_CON = 2.06 * 10**(-16)
 """
 Code constant: NUV_LAMBDA_CON
 
-Calibration from CPS to Flux in [erg sec-1 cm-2 AA-1], as given in GALEX
+calibration from CPS to Flux in [erg sec-1 cm-2 AA-1], as given in GALEX
 for the NUV filter.
 http://galexgi.gsfc.nasa.gov/docs/galex/FAQ/counts_background.html
 
@@ -467,11 +467,8 @@ def get_pixel_scale(header):
 
     '''
     w = wcs.WCS(header)
-
-    cdelt = np.matrix(w.wcs.get_cdelt())
-    pc = np.matrix(w.wcs.get_pc())
-    scale = np.array(cdelt * pc)[0,:]
-    pix_scale = abs(scale[0]) * u.deg.to(u.arcsec)
+    # NB: get_cdelt is supposed to work whether header has CDij, PC, or CDELT
+    pix_scale = abs(w.wcs.get_cdelt()[0]) * u.deg.to(u.arcsec)
     return(pix_scale)
 
 def get_pangle(header):
