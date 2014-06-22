@@ -1,5 +1,8 @@
 # test script for imagecube
 # modified from montage_wrappers/tests/test_wrappers.py
+from __future__ import print_function, division
+from ..extern import six
+
 import os
 import shutil
 import tempfile
@@ -15,6 +18,7 @@ from astropy.tests.helper import pytest
 from .. import imagecube
 
 # Values for fake header input
+# could randomize these to make a better test?
 cdelt_val = 0.0066667 # in degrees/pixel
 crpix_val = 50.5 
 cr1val_val = 10.5
@@ -40,7 +44,7 @@ class TestImagecube(object):
         self.tmpdir = tempfile.mkdtemp()
         os.mkdir(os.path.join(self.tmpdir, 'raw'))
 
-        # get the test data
+        # get the test data and copy it into the temp directory
 
 # end of class definition
 
@@ -49,6 +53,7 @@ class TestImagecube(object):
     def teardown_class(self):
         shutil.rmtree(self.tmpdir)
 
+# test the helper functions
     def test_helpers(self):
         pixscal_arcsec = imagecube.get_pixel_scale(self.header)
         pixscal_deg = round(pixscal_arcsec/3600.0,7) # rounding is not ideal
@@ -65,10 +70,23 @@ class TestImagecube(object):
         assert crota == 58.80616
 
 #    @pytest.mark.xfail()  # results are not consistent on different machines -- what does this do?
+
+# test the main imagecube script    
 #    def test_imagecube(self):
-#        imagecube.__main__()  # run through the whole procedure
-#        # or should we have a zipped list of images-with-headers, and test each step individually?
-#        data_check = fits_checksum() # do a checksum on the resulting datacube?
-#        header_check = fits_checksum() # do a checksum on the header
-#        assert_allclose(header_check==)
-#        assert_allclose(data_check==)
+# run through the whole procedure
+#        imagecube.__main__()  
+#        # (or should we have a zipped list of images-with-headers, and test each step individually?)
+# grab the output
+#        hdulist = fits.open(tmpdir+'/datacube/datacube.fits')
+# check that we get the right shape output, with valid pixels
+#        assert hdulist[0].data.shape == (XX,YY)
+#        valid = hdulist[0].data[~np.isnan(hdulist[0].data)]
+#        assert len(valid) == 65029
+# compute and add the checksums        
+#         hdulist[0].add_datasum(when='testing')
+#         hdulist[0].add_checksum(when='testing',override_datasum=True)
+# test against values previously computed
+#         assert hdulist[0].header['DATASUM']==dsum
+#         assert hdulist[0].header['DATASUM']==csum
+#         hdulist.close()
+#
