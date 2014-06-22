@@ -1,4 +1,5 @@
-# adapted from montage_wrappers/tests/test_wrappers.py
+# test script for imagecube
+# modified from montage_wrappers/tests/test_wrappers.py
 import os
 import shutil
 import tempfile
