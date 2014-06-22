@@ -19,6 +19,7 @@ cdelt_val = 0.0066667 # in degrees/pixel
 crpix_val = 50.5 
 cr1val_val = 10.5
 cr2val_val = -43.0
+crota2_val = 128.9
 
 class TestImagecube(object):
 
@@ -31,10 +32,9 @@ class TestImagecube(object):
         w.wcs.cdelt = np.array([-cdelt_val, cdelt_val])
         w.wcs.crval = [cr1val_val, cr2val_val]
         w.wcs.ctype = [b"RA---TAN", b"DEC--TAN"]
-        w.wcs.crota = [0, np.random.uniform(0., 360.)]
+        w.wcs.crota = [0, crota2_val]
 
         self.header = w.to_header()
-        self.crota = w.wcs.crota[1]
 
         # make a temporary directory for the input and output
         self.tmpdir = tempfile.mkdtemp()
@@ -50,10 +50,10 @@ class TestImagecube(object):
         shutil.rmtree(self.tmpdir)
 
     def test_helpers(self):
-        pixscal_deg = round(imagecube.get_pixel_scale(self.header)/3600.0,7)
-        pa = imagecube.get_pangle(self.header)
+        pixscal_deg = round(imagecube.get_pixel_scale(self.header)/3600.0,7) # rounding is not ideal
         assert pixscal_deg == cdelt_val
-        assert pa == self.crota
+        pa = round(imagecube.get_pangle(self.header),1)
+        assert pa == crota2_val
         racen, deccen, crota = imagecube.get_ref_wcs(self.header)
         assert racen == crpix_val
         assert deccen == crpix_val
