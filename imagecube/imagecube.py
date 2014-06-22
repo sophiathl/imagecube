@@ -541,7 +541,7 @@ def get_ref_wcs(img_name):
     try:
         rotation_pa = rot_angle # the user-input PA
     except NameError: # user didn't define it
-        log.info('Getting position angle from %s' % main_reference_image)
+        log.info('Getting position angle from %s' % img_name)
         rotation_pa = get_pangle(hdr)
     log.info('Using PA of %.1f degrees' % rotation_pa)
     hdulist.close()

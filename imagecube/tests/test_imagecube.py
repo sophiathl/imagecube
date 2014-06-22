@@ -59,10 +59,10 @@ class TestImagecube(object):
         assert conv_fact1 == u.MJy.to(u.Jy)/u.sr.to(u.arcsec**2) * (pixscal_arcsec**2)
         conv_fact2 = imagecube.get_conversion_factor(self.header,'BLINC') # unknown instrument, should give zero
         assert conv_fact2 == 0.0
-#        racen, deccen, crota = imagecube.get_ref_wcs('')
-#        assert racen == crpix_val
-#        assert deccen == crpix_val
-#        assert crot == self.crota
+        racen, deccen, crota = imagecube.get_ref_wcs('I1_n5128_mosaic.fits')
+        assert racen == 201.243776
+        assert deccen == -43.066428
+        assert crota == 58.80616
 
 #    @pytest.mark.xfail()  # results are not consistent on different machines -- what does this do?
 #    def test_imagecube(self):
