@@ -49,7 +49,7 @@ class TestImagecube(object):
         shutil.rmtree(self.tmpdir)
 
     def test_helpers(self):
-        pixscal_deg = imagecube.get_pixel_scale(self.header)/3600.0
+        pixscal_deg = round(imagecube.get_pixel_scale(self.header)/3600.0,7)
         pa = imagecube.get_pangle(self.header)
         assert pixscal_deg == cdelt_val
         assert pa == self.crota
