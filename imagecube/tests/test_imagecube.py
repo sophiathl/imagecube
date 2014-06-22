@@ -9,10 +9,10 @@ import numpy as np
 from numpy.testing import assert_allclose
 from astropy.wcs import WCS
 from astropy.io import fits
+from astropy import units as u
 from astropy.tests.helper import pytest
 
 from .. import imagecube
-#from imagecube import *
 
 # Values for fake header input
 cdelt_val = 0.0066667 # in degrees/pixel
@@ -50,14 +50,19 @@ class TestImagecube(object):
         shutil.rmtree(self.tmpdir)
 
     def test_helpers(self):
-        pixscal_deg = round(imagecube.get_pixel_scale(self.header)/3600.0,7) # rounding is not ideal
+        pixscal_arcsec = imagecube.get_pixel_scale(self.header)
+        pixscal_deg = round(pixscal_arcsec/3600.0,7) # rounding is not ideal
         assert pixscal_deg == cdelt_val
         pa = round(imagecube.get_pangle(self.header),1)
         assert pa == crota2_val
-        racen, deccen, crota = imagecube.get_ref_wcs(self.header)
-        assert racen == crpix_val
-        assert deccen == crpix_val
-        assert crot == self.crota
+        conv_fact1 = imagecube.get_conversion_factor(self.header,'MIPS') # assumed in MJy/sr
+        assert conv_fact1 == u.MJy.to(u.Jy)/u.sr.to(u.arcsec**2) * (pixscal_arcsec**2)
+        conv_fact2 = imagecube.get_conversion_factor(self.header,'BLINC') # unknown instrument, should give zero
+        assert conv_fact2 == 0.0
+#        racen, deccen, crota = imagecube.get_ref_wcs('')
+#        assert racen == crpix_val
+#        assert deccen == crpix_val
+#        assert crot == self.crota
 
 #    @pytest.mark.xfail()  # results are not consistent on different machines -- what does this do?
 #    def test_imagecube(self):
