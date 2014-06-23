@@ -42,7 +42,8 @@ class TestImagecube(object):
         self.header = w.to_header()
 
         # make a temporary directory for the input and output
-        self.tmpdir = tempfile.mkdtemp()
+#        self.tmpdir = tempfile.mkdtemp()
+        self.tmpdir = '/Volumes/data/imagecube'
 
         # get the test data and copy it to the temp directory
         try:
@@ -56,7 +57,7 @@ class TestImagecube(object):
 
 # get rid of the temporary files
     def teardown_class(self):
-        shutil.rmtree(self.tmpdir)
+#        shutil.rmtree(self.tmpdir)
         return
 
 # test the helper functions
@@ -74,29 +75,33 @@ class TestImagecube(object):
         assert deccen == -43.066428
         assert crota == 58.80616
 
-#    @pytest.mark.xfail()  # results are not consistent on different machines -- what does this do?
 
 # test the main imagecube script    
     def test_imagecube(self):
         # go where the test data are
         orig_dir = os.getcwd()
-        os.chdir(self.tmpdir)
+        os.chdir(self.tmpdir+'/imagecubetest')
         # run through the whole procedure
         # TBD: (or should we have a zipped list of images-with-headers, and test each step individually?)
-        imagecube.main(args='--cleanup')  
+        test_argstr = '--flux_conv --im_reg --im_conv --fwhm=8 --im_regrid --im_pixsc=3.0 --ang_size=300 --im_ref n5128_pbcd_24.fits --dir ./'  
+        imagecube.main(args=test_argstr)
 
-# grab the output
-#        hdulist = fits.open(tmpdir+'/datacube/datacube.fits')
-# check that we get the right shape output, with valid pixels
-#        assert hdulist[0].data.shape == (XX,YY)
-#        valid = hdulist[0].data[~np.isnan(hdulist[0].data)]
-#        assert len(valid) == 65029
-# compute and add the checksums        
-#         hdulist[0].add_datasum(when='testing')
-#         hdulist[0].add_checksum(when='testing',override_datasum=True)
-# test against values previously computed
-#         assert hdulist[0].header['DATASUM']==dsum
-#         assert hdulist[0].header['DATASUM']==csum
-#         hdulist.close()
+        # grab the output
+        hdulist = fits.open(self.tmpdir+'/imagecubetest/datacube/datacube.fits')
+
+        # check that we get the right shape output, with valid pixels
+        assert hdulist[1].data.shape == (136,136)
+        valid = hdulist[1].data[~np.isnan(hdulist[1].data)]
+        assert len(valid) == 10284
+
+        # compute and add the checksums        
+        hdulist[1].add_datasum(when='testing')
+        hdulist[1].add_checksum(when='testing',override_datasum=True)
+
+        # test against values previously computed
+        assert hdulist[1].header['DATASUM']== '3160818235' 
+        assert hdulist[1].header['CHECKSUM']== 'ITDJJS9JISCJIS9J'
+        hdulist.close()
         os.chdir(orig_dir)
+        return
 
