@@ -42,8 +42,7 @@ class TestImagecube(object):
         self.header = w.to_header()
 
         # make a temporary directory for the input and output
-#        self.tmpdir = tempfile.mkdtemp()
-        self.tmpdir = '/Volumes/data/imagecube'
+        self.tmpdir = tempfile.mkdtemp()
 
         # get the test data and copy it to the temp directory
         try:
@@ -57,7 +56,7 @@ class TestImagecube(object):
 
 # get rid of the temporary files
     def teardown_class(self):
-#        shutil.rmtree(self.tmpdir)
+        shutil.rmtree(self.tmpdir)
         return
 
 # test the helper functions
