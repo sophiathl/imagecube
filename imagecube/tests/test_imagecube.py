@@ -15,6 +15,7 @@ from astropy.io import fits
 from astropy import units as u
 from astropy.tests.helper import pytest
 from astropy.utils.exceptions import AstropyUserWarning
+from astropy.utils.data import download_file, clear_download_cache
 
 from .. import imagecube
 
@@ -25,6 +26,10 @@ crpix_val = 50.5
 cr1val_val = 10.5
 cr2val_val = -43.0
 crota2_val = 128.9
+
+# location of test data
+test_data_loc = "http://www.canfar.phys.uvic.ca/vospace/nodes/pbarmby/imagecube/"
+test_data_files = ['I1_n5128_mosaic.fits','I2_n5128_mosaic.fits','I3_n5128_mosaic.fits','I4_n5128_mosaic.fits','n5128_pbcd_24.fits']
 
 class TestImagecube(object):
 
@@ -45,11 +50,14 @@ class TestImagecube(object):
         self.tmpdir = tempfile.mkdtemp()
 
         # get the test data and copy it to the temp directory
-        try:
+        if os.path.exists('../data/testimgs'): # copy from ../data/testimgs if that exists 
             shutil.copytree('../data/testimgs',self.tmpdir+'/imagecubetest')
-        except OSError:
-            warnings.warn('cannot find test data') # change this to download
-
+        else: # download and symlink to temp directory
+            os.makedirs(self.tmpdir+'/imagecubetest/')
+            for fname in test_data_files:
+                tmpname = download_file(test_data_loc+fname)
+                linked_name = self.tmpdir+'/imagecubetest/'+fname
+                shutil.copy2(tmpname, linked_name)
 
 # end of class definition
 
@@ -57,7 +65,9 @@ class TestImagecube(object):
 # get rid of the temporary files
     def teardown_class(self):
         shutil.rmtree(self.tmpdir)
+        clear_download_cache()
         return
+
 
 # test the helper functions
     def test_helpers(self):
@@ -69,7 +79,7 @@ class TestImagecube(object):
         assert_allclose(conv_fact1,u.MJy.to(u.Jy)/u.sr.to(u.arcsec**2) * (pixscal_arcsec**2))
         conv_fact2 = imagecube.get_conversion_factor(self.header,'BLINC') # unknown instrument, should give zero
         assert_allclose(conv_fact2,0.0)
-        racen, deccen, crota = imagecube.get_ref_wcs('../data/I1_n5128_mosaic.fits') # eventually use astropy.utils.data
+        racen, deccen, crota = imagecube.get_ref_wcs(self.tmpdir+'/imagecubetest/I1_n5128_mosaic.fits') 
         assert racen == 201.243776
         assert deccen == -43.066428
         assert crota == 58.80616
@@ -84,6 +94,7 @@ class TestImagecube(object):
         # TBD: (or should we have a zipped list of images-with-headers, and test each step individually?)
         test_argstr = '--flux_conv --im_reg --im_conv --fwhm=8 --im_regrid --im_pixsc=3.0 --ang_size=300 --im_ref n5128_pbcd_24.fits --dir ./'  
         imagecube.main(args=test_argstr)
+#        imagecube.main(args='--help')
 
         # grab the output
         hdulist = fits.open(self.tmpdir+'/imagecubetest/datacube/datacube.fits')
