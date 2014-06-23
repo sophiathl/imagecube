@@ -1,7 +1,6 @@
 # test script for imagecube
 # modified from montage_wrappers/tests/test_wrappers.py
 from __future__ import print_function, division
-from ..extern import six
 
 import os
 import shutil
@@ -56,14 +55,13 @@ class TestImagecube(object):
 # test the helper functions
     def test_helpers(self):
         pixscal_arcsec = imagecube.get_pixel_scale(self.header)
-        pixscal_deg = round(pixscal_arcsec/3600.0,7) # rounding is not ideal
-        assert pixscal_deg == cdelt_val
-        pa = round(imagecube.get_pangle(self.header),1)
-        assert pa == crota2_val
+        assert_allclose(pixscal_arcsec/3600.0,cdelt_val)
+        pa = imagecube.get_pangle(self.header)
+        assert_allclose(pa,crota2_val)
         conv_fact1 = imagecube.get_conversion_factor(self.header,'MIPS') # assumed in MJy/sr
-        assert conv_fact1 == u.MJy.to(u.Jy)/u.sr.to(u.arcsec**2) * (pixscal_arcsec**2)
+        assert_allclose(conv_fact1,u.MJy.to(u.Jy)/u.sr.to(u.arcsec**2) * (pixscal_arcsec**2))
         conv_fact2 = imagecube.get_conversion_factor(self.header,'BLINC') # unknown instrument, should give zero
-        assert conv_fact2 == 0.0
+        assert_allclose(conv_fact2,0.0)
         racen, deccen, crota = imagecube.get_ref_wcs('I1_n5128_mosaic.fits')
         assert racen == 201.243776
         assert deccen == -43.066428

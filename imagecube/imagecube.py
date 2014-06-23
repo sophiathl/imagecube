@@ -11,7 +11,7 @@
 # header information.
 
 from __future__ import print_function, division
-from ..extern import six
+#from ..extern import six
 
 import sys
 import getopt
