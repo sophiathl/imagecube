@@ -52,7 +52,7 @@ class TestImagecube(object):
         # get the test data and copy it to the temp directory
         if os.path.exists('../data/testimgs'): # copy from ../data/testimgs if that exists 
             shutil.copytree('../data/testimgs',self.tmpdir+'/imagecubetest')
-        else: # download and symlink to temp directory
+        else: # download and symlink to temp directory: NOT WORKING
             os.makedirs(self.tmpdir+'/imagecubetest/')
             for fname in test_data_files:
                 tmpname = download_file(test_data_loc+fname)
@@ -94,7 +94,6 @@ class TestImagecube(object):
         # TBD: (or should we have a zipped list of images-with-headers, and test each step individually?)
         test_argstr = '--flux_conv --im_reg --im_conv --fwhm=8 --im_regrid --im_pixsc=3.0 --ang_size=300 --im_ref n5128_pbcd_24.fits --dir ./'  
         imagecube.main(args=test_argstr)
-#        imagecube.main(args='--help')
 
         # grab the output
         hdulist = fits.open(self.tmpdir+'/imagecubetest/datacube/datacube.fits')
