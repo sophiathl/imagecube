@@ -930,7 +930,8 @@ def main(args=None):
         arglist = string.split(args)
     else:
         arglist = sys.argv[1:]
-    parse_command_line(arglist)
+    parse_command_line(arglist) # TODO: figure out how to catch sys.exit when running interactively
+
     start_time = datetime.now()
 
     if (do_cleanup):

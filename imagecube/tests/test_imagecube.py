@@ -46,7 +46,7 @@ class TestImagecube(object):
 
         # get the test data and copy it to the temp directory
         try:
-            shutil.copytree('../data/testimgs',self.tmpdir+'imagecubetest')
+            shutil.copytree('../data/testimgs',self.tmpdir+'/imagecubetest')
         except OSError:
             warnings.warn('cannot find test data') # change this to download
 
@@ -56,7 +56,7 @@ class TestImagecube(object):
 
 # get rid of the temporary files
     def teardown_class(self):
-#        shutil.rmtree(self.tmpdir)
+        shutil.rmtree(self.tmpdir)
         return
 
 # test the helper functions
@@ -83,7 +83,7 @@ class TestImagecube(object):
         os.chdir(self.tmpdir)
         # run through the whole procedure
         # TBD: (or should we have a zipped list of images-with-headers, and test each step individually?)
-#        imagecube.__main__()  
+        imagecube.main(args='--help')  
 
 # grab the output
 #        hdulist = fits.open(tmpdir+'/datacube/datacube.fits')
