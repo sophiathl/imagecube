@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import os
 import shutil
 import tempfile
+import warnings
 from hashlib import md5
 
 import numpy as np
@@ -13,6 +14,7 @@ from astropy.wcs import WCS
 from astropy.io import fits
 from astropy import units as u
 from astropy.tests.helper import pytest
+from astropy.utils.exceptions import AstropyUserWarning
 
 from .. import imagecube
 
@@ -41,9 +43,13 @@ class TestImagecube(object):
 
         # make a temporary directory for the input and output
         self.tmpdir = tempfile.mkdtemp()
-        os.mkdir(os.path.join(self.tmpdir, 'raw'))
 
-        # get the test data and copy it into the temp directory
+        # get the test data and copy it to the temp directory
+        try:
+            shutil.copytree('../data/testimgs',self.tmpdir+'imagecubetest')
+        except OSError:
+            warnings.warn('cannot find test data')
+
 
 # end of class definition
 
@@ -62,7 +68,7 @@ class TestImagecube(object):
         assert_allclose(conv_fact1,u.MJy.to(u.Jy)/u.sr.to(u.arcsec**2) * (pixscal_arcsec**2))
         conv_fact2 = imagecube.get_conversion_factor(self.header,'BLINC') # unknown instrument, should give zero
         assert_allclose(conv_fact2,0.0)
-        racen, deccen, crota = imagecube.get_ref_wcs('../data/I1_n5128_mosaic.fits')
+        racen, deccen, crota = imagecube.get_ref_wcs('../data/I1_n5128_mosaic.fits') # eventually use astropy.utils.data
         assert racen == 201.243776
         assert deccen == -43.066428
         assert crota == 58.80616
@@ -70,8 +76,10 @@ class TestImagecube(object):
 #    @pytest.mark.xfail()  # results are not consistent on different machines -- what does this do?
 
 # test the main imagecube script    
-#    def test_imagecube(self):
+    def test_imagecube(self):
 # run through the whole procedure
+        orig_dir = os.getcwd()
+        os.chdir(self.tmpdir)
 #        imagecube.__main__()  
 #        # (or should we have a zipped list of images-with-headers, and test each step individually?)
 # grab the output
@@ -87,4 +95,5 @@ class TestImagecube(object):
 #         assert hdulist[0].header['DATASUM']==dsum
 #         assert hdulist[0].header['DATASUM']==csum
 #         hdulist.close()
-#
+        os.chdir(orig_dir)
+
