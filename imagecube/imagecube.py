@@ -20,6 +20,7 @@ import math
 import os
 import warnings
 import shutil
+import string
 
 from datetime import datetime
 from astropy import units as u
@@ -249,7 +250,7 @@ of your input images and try again.
     """)
 
 
-def parse_command_line():
+def parse_command_line(args):
     """
     Parses the command line to obtain parameters.
 
@@ -271,7 +272,7 @@ def parse_command_line():
 
 ##TODO: switch over to argparse
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "", ["dir=", "ang_size=",
+        opts, args = getopt.getopt(args, "", ["dir=", "ang_size=",
                                    "flux_conv", "im_conv", "im_reg", "im_ref=",
                                    "rot_angle=", "im_conv", "fwhm=", "kernels=", 
                                    "im_pixsc=","im_regrid", "seds", "cleanup", "help"])
@@ -925,26 +926,36 @@ def main(args=None):
     kernel_directory = ''
     im_pixsc = ''
 
-    parse_command_line()
+    if args !=None:
+        arglist = string.split(args)
+    else:
+        arglist = sys.argv[1:]
+    parse_command_line(arglist)
     start_time = datetime.now()
 
     if (do_cleanup):
         cleanup_output_files()
-        sys.exit()
+        if __name__ == '__main__':
+            sys.exit()
+        else:
+            return
 
     # if not just cleaning up, make a log file which records input parameters
     logfile_name = 'imagecube_'+ start_time.strftime('%Y-%m-%d_%H%M%S') + '.log'
     logf = open(logfile_name, 'w')
     logf.write(start_time.strftime('%Y-%m-%d_%H%M%S'))
-    logf.write(': imagecube called with arguments %s' % sys.argv[1:])
+    logf.write(': imagecube called with arguments %s' % arglist)
     logf.close()
 
     # Grab all of the .fits and .fit files in the specified directory
     all_files = glob.glob(image_directory + "/*.fit*")
     # no use doing anything if there aren't any files!
     if len(all_files) == 0:
-        warnings.warn('No fits found in directory' % image_directory, AstropyUserWarning )
-        sys.exit()
+        warnings.warn('No fits files found in directory %s' % image_directory, AstropyUserWarning )
+        if __name__ == '__main__':
+            sys.exit()
+        else:
+            return
 
     # Lists to store information
     global image_data
@@ -1011,4 +1022,7 @@ def main(args=None):
     if (do_seds):
         output_seds(images_with_headers)
 
-    sys.exit()
+    if __name__ == '__main__':
+        sys.exit()
+    else:
+        return
