@@ -62,7 +62,7 @@ class TestImagecube(object):
         assert_allclose(conv_fact1,u.MJy.to(u.Jy)/u.sr.to(u.arcsec**2) * (pixscal_arcsec**2))
         conv_fact2 = imagecube.get_conversion_factor(self.header,'BLINC') # unknown instrument, should give zero
         assert_allclose(conv_fact2,0.0)
-        racen, deccen, crota = imagecube.get_ref_wcs('I1_n5128_mosaic.fits')
+        racen, deccen, crota = imagecube.get_ref_wcs('../data/I1_n5128_mosaic.fits')
         assert racen == 201.243776
         assert deccen == -43.066428
         assert crota == 58.80616
