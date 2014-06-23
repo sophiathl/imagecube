@@ -271,6 +271,7 @@ def parse_command_line(args):
     global rot_angle
 
 ##TODO: switch over to argparse
+    parse_status = 0
     try:
         opts, args = getopt.getopt(args, "", ["dir=", "ang_size=",
                                    "flux_conv", "im_conv", "im_reg", "im_ref=",
@@ -279,18 +280,21 @@ def parse_command_line(args):
     except getopt.GetoptError, exc:
         print(exc.msg)
         print("An error occurred. Check your parameters and try again.")
-        sys.exit(2)
+        parse_status = 2
+        return(parse_status)
     for opt, arg in opts:
         if opt in ("--help"):
             print_usage()
-            sys.exit()
+            parse_status = 1
+            return(parse_status)
         elif opt in ("--ang_size"):
             ang_size = float(arg)
         elif opt in ("--dir"):
             image_directory = arg
             if (not os.path.isdir(image_directory)):
                 print("Error: The directory cannot be found: " + image_directory)
-                sys.exit()
+                parse_status = 2
+                return(parse_status)
         elif opt in ("--flux_conv"):
             do_conversion = True
         elif opt in ("--im_reg"):
@@ -314,7 +318,8 @@ def parse_command_line(args):
             if (not os.path.isdir(kernel_directory)):
                 print("Error: The directory cannot be found: " + 
                       kernel_directory)
-                sys.exit()
+                parse_status=2
+                return
         elif opt in ("--im_pixsc"):
             im_pixsc = float(arg)
 
@@ -325,8 +330,8 @@ def parse_command_line(args):
             print("The file " + main_reference_image + 
                   " could not be found in the directory " + image_directory +
                   ". Cannot run without reference image, exiting.")
-            sys.exit()
-    return
+            parse_status = 2
+    return(parse_status)
 
 def get_conversion_factor(header, instrument):
     """
@@ -930,7 +935,15 @@ def main(args=None):
         arglist = string.split(args)
     else:
         arglist = sys.argv[1:]
-    parse_command_line(arglist) # TODO: figure out how to catch sys.exit when running interactively
+    parse_status = parse_command_line(arglist) 
+    if parse_status > 0:
+        if __name__ == '__main__':
+            try:
+                sys.exit()
+            except SystemExit:
+                return
+        else:
+            return
 
     start_time = datetime.now()
 

@@ -83,7 +83,7 @@ class TestImagecube(object):
         os.chdir(self.tmpdir)
         # run through the whole procedure
         # TBD: (or should we have a zipped list of images-with-headers, and test each step individually?)
-        imagecube.main(args='--help')  
+        imagecube.main(args='--junk')  
 
 # grab the output
 #        hdulist = fits.open(tmpdir+'/datacube/datacube.fits')
