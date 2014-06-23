@@ -938,10 +938,7 @@ def main(args=None):
     parse_status = parse_command_line(arglist) 
     if parse_status > 0:
         if __name__ == '__main__':
-            try:
-                sys.exit()
-            except SystemExit:
-                return
+            sys.exit()
         else:
             return
 
