@@ -98,18 +98,13 @@ class TestImagecube(object):
         # grab the output
         hdulist = fits.open(self.tmpdir+'/imagecubetest/datacube/datacube.fits')
 
-        # check that we get the right shape output, with valid pixels
-        assert hdulist[1].data.shape == (136,136)
-        valid = hdulist[1].data[~np.isnan(hdulist[1].data)]
-        assert len(valid) == 10284
+        # check that we get the right shape output & number of non-NaN pixels
+        assert hdulist[0].data.shape == (5,102,102)
+        valid = hdulist[0].data[~np.isnan(hdulist[0].data)]
+        assert len(valid) == 52020
 
-        # compute and add the checksums        
-        hdulist[1].add_datasum(when='testing')
-        hdulist[1].add_checksum(when='testing',override_datasum=True)
-
-        # test against values previously computed
-        assert hdulist[1].header['DATASUM']== '3160818235' 
-        assert hdulist[1].header['CHECKSUM']== 'ITDJJS9JISCJIS9J'
+        # test DATASUM against value previously computed
+        assert hdulist[0].header['DATASUM']== '842801625' 
         hdulist.close()
         os.chdir(orig_dir)
         return
