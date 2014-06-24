@@ -780,16 +780,14 @@ def create_data_cube(images_with_headers, logfile_name, header_text):
     if do_conversion:
         prihdr['BUNIT'] = ('Jy/pixel', 'Units of image data')
     # add the WCS info from the regridding stage
-    # TODO: deal with case where this hasn't been done
+    # TODO: deal with case where regridding hasn't been done
     wcs_header = fits.Header.fromtextfile(header_text)
     for key in wcs_header.keys():
         if key not in prihdr.keys():
             prihdr[key] = wcs_header[key] 
     
-    # now use this header to create a new fits file
-    prihdu = fits.PrimaryHDU(header=prihdr)
-    cube_hdulist = fits.HDUList([prihdu])
-
+    # put the image data into a list (not sure this is quite the right way to do it)
+    resampled_images=[]
     for i in range(0, len(images_with_headers)):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
@@ -797,10 +795,16 @@ def create_data_cube(images_with_headers, logfile_name, header_text):
                               original_filename  + "_resampled.fits")
         
         hdulist = fits.open(resampled_filename)
-        cube_hdulist.append(hdulist[0])
+        image = hdulist[0].data
+        resampled_images.append(image)
         hdulist.close()
 
-    cube_hdulist.writeto(new_directory + '/' + 'datacube.fits',clobber=True)
+    # now use the header and data to create a new fits file
+    prihdu = fits.PrimaryHDU(header=prihdr, data=resampled_images)
+    hdulist = fits.HDUList([prihdu])
+    hdulist[0].add_datasum(when='testing')
+    hdulist[0].add_checksum(when='testing',override_datasum=True)
+    hdulist.writeto(new_directory + '/' + 'datacube.fits',clobber=True)
     return
 
 
