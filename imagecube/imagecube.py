@@ -715,7 +715,7 @@ def resample_images(images_with_headers, logfile_name):
         os.makedirs(new_directory)
 
     # figure out the geometry of the resampled images
-    width_input = ang_size / (im_pixsc) 
+    width_input = ang_size / im_pixsc
     height_input = width_input
 
     # get WCS info for the reference image
@@ -725,7 +725,7 @@ def resample_images(images_with_headers, logfile_name):
     montage.commands.mHdr(`lngref_input` + ' ' + `latref_input`, width_input, 
                           'grid_final_resample_header', system='eq', 
                           equinox=2000.0, height=height_input, 
-                          pix_size=im_pixsc, rotation=0.)
+                          pix_size=im_pixsc, rotation=rotation_pa)
 
     for i in range(0, len(images_with_headers)):
         original_filename = os.path.basename(images_with_headers[i][2])
@@ -745,11 +745,11 @@ def resample_images(images_with_headers, logfile_name):
         # delete the header file
         os.unlink(artificial_header)
 
-    create_data_cube(images_with_headers, logfile_name, 'grid_final_resample_header')
     os.unlink('grid_final_resample_header')
+    create_data_cube(images_with_headers, logfile_name)
     return
 
-def create_data_cube(images_with_headers, logfile_name, header_text):
+def create_data_cube(images_with_headers, logfile_name):
     """
     Creates a data cube from the provided images.
 
@@ -765,21 +765,6 @@ def create_data_cube(images_with_headers, logfile_name, header_text):
     if not os.path.exists(new_directory):
         os.makedirs(new_directory)
 
-    # make a new header
-    prihdr = fits.Header()
-    # put some information in it
-    prihdr['CREATOR'] = 'IMAGECUBE'
-    prihdr['DATE'] = datetime.now().strftime('%Y-%m-%d')
-    prihdr['LOGFILE'] = logfile_name 
-    if do_conversion:
-        prihdr['BUNIT'] = ('Jy/pixel', 'Units of image data')
-    # add the WCS info from the regridding stage
-    # TODO: deal with case where regridding hasn't been done
-    wcs_header = fits.Header.fromtextfile(header_text)
-    for key in wcs_header.keys():
-        if key not in prihdr.keys():
-            prihdr[key] = wcs_header[key] 
-    
     # put the image data into a list (not sure this is quite the right way to do it)
     resampled_images=[]
     for i in range(0, len(images_with_headers)):
@@ -791,7 +776,18 @@ def create_data_cube(images_with_headers, logfile_name, header_text):
         hdulist = fits.open(resampled_filename)
         image = hdulist[0].data
         resampled_images.append(image)
+        if i == 0:     # grab the WCS info from the first input image
+            new_wcs = wcs.WCS(hdulist[0].header)
         hdulist.close()
+
+    # make a new header with the WCS info
+    prihdr = new_wcs.to_header()
+    # put some other information in the header
+    prihdr['CREATOR'] = ('IMAGECUBE', 'Software used to create this file') # TODO: add version
+    prihdr['DATE'] = (datetime.now().strftime('%Y-%m-%d'), 'File creation date')
+    prihdr['LOGFILE'] = (logfile_name, 'imagecube log file') 
+    if do_conversion:
+        prihdr['BUNIT'] = ('Jy/pixel', 'Units of image data')
 
     # now use the header and data to create a new fits file
     prihdu = fits.PrimaryHDU(header=prihdr, data=resampled_images)
@@ -935,7 +931,7 @@ def main(args=None):
     logf = open(logfile_name, 'w')
     logf.write(start_time.strftime('%Y-%m-%d_%H%M%S'))
     logf.write(': imagecube called with arguments %s' % sys.argv[1:])
-    logf.close()
+    logf.close() # NOTETOSELF: WANT MORE INFO IN LOG FILES; FIX
 
     # Grab all of the .fits and .fit files in the specified directory
     all_files = glob.glob(image_directory + "/*.fit*")
