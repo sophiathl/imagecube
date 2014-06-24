@@ -469,6 +469,7 @@ def get_pixel_scale(header):
     '''
     w = wcs.WCS(header)
     # NB: get_cdelt is supposed to work whether header has CDij, PC, or CDELT
+    #     but not quite sure that it does work for CD mtx
     pix_scale = abs(w.wcs.get_cdelt()[0]) * u.deg.to(u.arcsec)
     return(pix_scale)
 
