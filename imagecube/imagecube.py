@@ -928,81 +928,80 @@ def main(args=None):
 
     # if not just cleaning up, make a log file which records input parameters
     logfile_name = 'imagecube_'+ start_time.strftime('%Y-%m-%d_%H%M%S') + '.log'
-    logf = open(logfile_name, 'w')
-    logf.write(start_time.strftime('%Y-%m-%d_%H%M%S'))
-    logf.write(': imagecube called with arguments %s' % sys.argv[1:])
-    logf.close() # NOTETOSELF: WANT MORE INFO IN LOG FILES; FIX
-
-    # Grab all of the .fits and .fit files in the specified directory
-    all_files = glob.glob(image_directory + "/*.fit*")
-    # no use doing anything if there aren't any files!
-    if len(all_files) == 0:
-        warnings.warn('No fits found in directory' % image_directory, AstropyUserWarning )
-        sys.exit()
-
-    # Lists to store information
-    global image_data
-    global converted_data
-    global registered_data
-    global convolved_data
-    global resampled_data
-    global headers
-    global filenames
-    image_data = []
-    converted_data = []
-    registered_data = []
-    convolved_data = []
-    resampled_data = []
-    headers = []
-    filenames = []
-
-    for (i,fitsfile) in enumerate(all_files):
-        hdulist = fits.open(fitsfile)
-        img_extens = find_image_planes(hdulist)
-        # NOTETOSELF: right now we are just using the *first* image extension in a file
-        #             which is not what we want to do, ultimately.
-        header = hdulist[img_extens[0]].header
-        image = hdulist[img_extens[0]].data
-        # Strip the .fit or .fits extension from the filename so we can append
-        # things to it later on
-        filename = os.path.splitext(hdulist.filename())[0]
-        hdulist.close()
-        # check to see if image has reasonable scale & orientation
-        # NOTETOSELF: should this really be here? It's not relevant for just flux conversion.
-        #             want separate loop over image planes, after finishing file loop
-        pixelscale = get_pixel_scale(header)
-        fov = pixelscale * float(header['NAXIS1'])
-        log.info("Checking %s: is pixel scale (%.2f\") < ang_size (%.2f\") < FOV (%.2f\") ?"% (fitsfile,pixelscale, ang_size,fov))
-        if (pixelscale < ang_size < fov):
-            try:
-                wavelength = header['WAVELNTH'] 
-                header['WAVELNTH'] = (wavelength, 'micron') # SOPHIA: why are we reading the keyword then setting it?
-                image_data.append(image)
-                headers.append(header)
-                filenames.append(filename)
-            except KeyError:
-                warnings.warn('Image %s has no WAVELNTH keyword, will not be used' % filename, AstropyUserWarning)
-        else:
-            warnings.warn("Image %s does not meet the above criteria." % filename, AstropyUserWarning) 
-
-    # Sort the lists by their WAVELNTH value
-    images_with_headers_unsorted = zip(image_data, headers, filenames)
-    images_with_headers = sorted(images_with_headers_unsorted, 
-                                 key=lambda header: header[1]['WAVELNTH'])
-
-    if (do_conversion):
-        convert_images(images_with_headers)
-
-    if (do_registration):
-        register_images(images_with_headers)
-
-    if (do_convolution):
-        convolve_images(images_with_headers)
-
-    if (do_resampling):
-        resample_images(images_with_headers, logfile_name)
-
-    if (do_seds):
-        output_seds(images_with_headers)
-
-    sys.exit()
+    with log.log_to_file(logfile_name,filter_origin='imagecube.imagecube'):
+    	log.info('imagecube started at %s' % start_time.strftime('%Y-%m-%d_%H%M%S'))
+    	log.info('imagecube called with arguments %s' % sys.argv[1:])
+    	
+    	# Grab all of the .fits and .fit files in the specified directory
+    	all_files = glob.glob(image_directory + "/*.fit*")
+    	# no use doing anything if there aren't any files!
+    	if len(all_files) == 0:
+    	    warnings.warn('No fits found in directory' % image_directory, AstropyUserWarning )
+    	    sys.exit()
+    	
+    	# Lists to store information
+    	global image_data
+    	global converted_data
+    	global registered_data
+    	global convolved_data
+    	global resampled_data
+    	global headers
+    	global filenames
+    	image_data = []
+    	converted_data = []
+    	registered_data = []
+    	convolved_data = []
+    	resampled_data = []
+    	headers = []
+    	filenames = []
+    	
+    	for (i,fitsfile) in enumerate(all_files):
+    	    hdulist = fits.open(fitsfile)
+    	    img_extens = find_image_planes(hdulist)
+    	    # NOTETOSELF: right now we are just using the *first* image extension in a file
+    	    #             which is not what we want to do, ultimately.
+    	    header = hdulist[img_extens[0]].header
+    	    image = hdulist[img_extens[0]].data
+    	    # Strip the .fit or .fits extension from the filename so we can append
+    	    # things to it later on
+    	    filename = os.path.splitext(hdulist.filename())[0]
+    	    hdulist.close()
+    	    # check to see if image has reasonable scale & orientation
+    	    # NOTETOSELF: should this really be here? It's not relevant for just flux conversion.
+    	    #             want separate loop over image planes, after finishing file loop
+    	    pixelscale = get_pixel_scale(header)
+    	    fov = pixelscale * float(header['NAXIS1'])
+    	    log.info("Checking %s: is pixel scale (%.2f\") < ang_size (%.2f\") < FOV (%.2f\") ?"% (fitsfile,pixelscale, ang_size,fov))
+    	    if (pixelscale < ang_size < fov):
+    	        try:
+    	            wavelength = header['WAVELNTH'] 
+    	            header['WAVELNTH'] = (wavelength, 'micron') # SOPHIA: why are we reading the keyword then setting it?
+    	            image_data.append(image)
+    	            headers.append(header)
+    	            filenames.append(filename)
+    	        except KeyError:
+    	            warnings.warn('Image %s has no WAVELNTH keyword, will not be used' % filename, AstropyUserWarning)
+    	    else:
+    	        warnings.warn("Image %s does not meet the above criteria." % filename, AstropyUserWarning) 
+    	
+    	# Sort the lists by their WAVELNTH value
+    	images_with_headers_unsorted = zip(image_data, headers, filenames)
+    	images_with_headers = sorted(images_with_headers_unsorted, 
+    	                             key=lambda header: header[1]['WAVELNTH'])
+    	
+    	if (do_conversion):
+    	    convert_images(images_with_headers)
+    	
+    	if (do_registration):
+    	    register_images(images_with_headers)
+    	
+    	if (do_convolution):
+    	    convolve_images(images_with_headers)
+    	
+    	if (do_resampling):
+    	    resample_images(images_with_headers,logfile_name)
+    	
+    	if (do_seds):
+    	    output_seds(images_with_headers)
+    	
+    	sys.exit()
