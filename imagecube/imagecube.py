@@ -11,7 +11,6 @@
 # header information.
 
 from __future__ import print_function, division
-#from ..extern import six
 
 import sys
 import getopt
@@ -468,9 +467,12 @@ def get_pixel_scale(header):
 
     '''
     w = wcs.WCS(header)
-    # NB: get_cdelt is supposed to work whether header has CDij, PC, or CDELT
-    #     but not quite sure that it does work for CD mtx
-    pix_scale = abs(w.wcs.get_cdelt()[0]) * u.deg.to(u.arcsec)
+
+    if w.wcs.has_cd(): # get_cdelt is supposed to work whether header has CDij, PC, or CDELT
+        pc = np.matrix(w.wcs.get_pc())
+        pix_scale =  math.sqrt(pc[0,0]**2+pc[0,1]**2) * u.deg.to(u.arcsec)
+    else: #       but don't think it does
+        pix_scale = abs(w.wcs.get_cdelt()[0]) * u.deg.to(u.arcsec)
     return(pix_scale)
 
 def get_pangle(header):
@@ -484,15 +486,6 @@ def get_pangle(header):
 
 
     '''
-#    try:
-#        if 'CROTA2' in header.keys(): # use the CROTA2 kw if present
-#            return(float(header['CROTA2']))
-#        else: # otherwise use the CD matrix
-#            cr2 = math.atan2(header['CD1_2'],header['CD2_2'])*u.radian.to(u.deg)
-#            return(cr2) 
-#    except KeyError:
-#        warnings.warn('No PA information found!')
-#        return(0.0)
     w = wcs.WCS(header)
     pc = w.wcs.get_pc()
     cr2 = math.atan2(pc[0,1],pc[0,0])*u.radian.to(u.deg)    
