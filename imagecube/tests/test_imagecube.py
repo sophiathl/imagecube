@@ -5,6 +5,7 @@ from __future__ import print_function, division
 import os
 import shutil
 import tempfile
+import warnings
 from hashlib import md5
 
 import numpy as np
@@ -13,6 +14,8 @@ from astropy.wcs import WCS
 from astropy.io import fits
 from astropy import units as u
 from astropy.tests.helper import pytest
+from astropy.utils.exceptions import AstropyUserWarning
+from astropy.utils.data import download_file, clear_download_cache
 
 from .. import imagecube
 
@@ -23,6 +26,10 @@ crpix_val = 50.5
 cr1val_val = 10.5
 cr2val_val = -43.0
 crota2_val = 128.9
+
+# location of test data
+test_data_loc = "http://www.canfar.phys.uvic.ca/vospace/nodes/pbarmby/imagecube/"
+test_data_files = ['I1_n5128_mosaic.fits','I2_n5128_mosaic.fits','I3_n5128_mosaic.fits','I4_n5128_mosaic.fits','n5128_pbcd_24.fits']
 
 class TestImagecube(object):
 
@@ -41,9 +48,16 @@ class TestImagecube(object):
 
         # make a temporary directory for the input and output
         self.tmpdir = tempfile.mkdtemp()
-        os.mkdir(os.path.join(self.tmpdir, 'raw'))
 
-        # get the test data and copy it into the temp directory
+        # get the test data and copy it to the temp directory
+        if os.path.exists('../data/testimgs'): # copy from ../data/testimgs if that exists 
+            shutil.copytree('../data/testimgs',self.tmpdir+'/imagecubetest')
+        else: # download and symlink to temp directory: NOT WORKING
+            os.makedirs(self.tmpdir+'/imagecubetest/')
+            for fname in test_data_files:
+                tmpname = download_file(test_data_loc+fname)
+                linked_name = self.tmpdir+'/imagecubetest/'+fname
+                shutil.copy2(tmpname, linked_name)
 
 # end of class definition
 
@@ -51,6 +65,9 @@ class TestImagecube(object):
 # get rid of the temporary files
     def teardown_class(self):
         shutil.rmtree(self.tmpdir)
+        clear_download_cache()
+        return
+
 
 # test the helper functions
     def test_helpers(self):
@@ -62,29 +79,38 @@ class TestImagecube(object):
         assert_allclose(conv_fact1,u.MJy.to(u.Jy)/u.sr.to(u.arcsec**2) * (pixscal_arcsec**2))
         conv_fact2 = imagecube.get_conversion_factor(self.header,'BLINC') # unknown instrument, should give zero
         assert_allclose(conv_fact2,0.0)
-        racen, deccen, crota = imagecube.get_ref_wcs('../data/I1_n5128_mosaic.fits')
+        racen, deccen, crota = imagecube.get_ref_wcs(self.tmpdir+'/imagecubetest/I1_n5128_mosaic.fits') 
         assert racen == 201.243776
         assert deccen == -43.066428
         assert crota == 58.80616
 
-#    @pytest.mark.xfail()  # results are not consistent on different machines -- what does this do?
 
 # test the main imagecube script    
-#    def test_imagecube(self):
-# run through the whole procedure
-#        imagecube.__main__()  
-#        # (or should we have a zipped list of images-with-headers, and test each step individually?)
-# grab the output
-#        hdulist = fits.open(tmpdir+'/datacube/datacube.fits')
-# check that we get the right shape output, with valid pixels
-#        assert hdulist[0].data.shape == (XX,YY)
-#        valid = hdulist[0].data[~np.isnan(hdulist[0].data)]
-#        assert len(valid) == 65029
-# compute and add the checksums        
-#         hdulist[0].add_datasum(when='testing')
-#         hdulist[0].add_checksum(when='testing',override_datasum=True)
-# test against values previously computed
-#         assert hdulist[0].header['DATASUM']==dsum
-#         assert hdulist[0].header['DATASUM']==csum
-#         hdulist.close()
-#
+    def test_imagecube(self):
+        # go where the test data are
+        orig_dir = os.getcwd()
+        os.chdir(self.tmpdir+'/imagecubetest')
+        # run through the whole procedure
+        # TBD: (or should we have a zipped list of images-with-headers, and test each step individually?)
+        test_argstr = '--flux_conv --im_reg --im_conv --fwhm=8 --im_regrid --im_pixsc=3.0 --ang_size=300 --im_ref n5128_pbcd_24.fits --dir ./'  
+        imagecube.main(args=test_argstr)
+
+        # grab the output
+        hdulist = fits.open(self.tmpdir+'/imagecubetest/datacube/datacube.fits')
+
+        # check that we get the right shape output, with valid pixels
+        assert hdulist[1].data.shape == (136,136)
+        valid = hdulist[1].data[~np.isnan(hdulist[1].data)]
+        assert len(valid) == 10284
+
+        # compute and add the checksums        
+        hdulist[1].add_datasum(when='testing')
+        hdulist[1].add_checksum(when='testing',override_datasum=True)
+
+        # test against values previously computed
+        assert hdulist[1].header['DATASUM']== '3160818235' 
+        assert hdulist[1].header['CHECKSUM']== 'ITDJJS9JISCJIS9J'
+        hdulist.close()
+        os.chdir(orig_dir)
+        return
+
