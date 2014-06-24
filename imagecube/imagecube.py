@@ -798,8 +798,8 @@ def create_data_cube(images_with_headers, logfile_name):
     # now use the header and data to create a new fits file
     prihdu = fits.PrimaryHDU(header=prihdr, data=resampled_images)
     hdulist = fits.HDUList([prihdu])
-    hdulist[0].add_datasum(when='testing')
-    hdulist[0].add_checksum(when='testing',override_datasum=True)
+    hdulist[0].add_datasum(when='Computed by imagecube')
+    hdulist[0].add_checksum(when='Computed by imagecube',override_datasum=True)
     hdulist.writeto(new_directory + '/' + 'datacube.fits',clobber=True)
     return
 
@@ -967,7 +967,7 @@ def main(args=None):
     logfile_name = 'imagecube_'+ start_time.strftime('%Y-%m-%d_%H%M%S') + '.log'
     with log.log_to_file(logfile_name,filter_origin='imagecube.imagecube'):
     	log.info('imagecube started at %s' % start_time.strftime('%Y-%m-%d_%H%M%S'))
-    	log.info('imagecube called with arguments %s' % sys.argv[1:])
+    	log.info('imagecube called with arguments %s' % arglist)
 
 	# Grab all of the .fits and .fit files in the specified directory
         all_files = glob.glob(image_directory + "/*.fit*")
@@ -1008,30 +1008,31 @@ def main(args=None):
 	             warnings.warn('Image %s has no WAVELNTH keyword, will not be used' % filename, AstropyUserWarning)
 	     else:
 	         warnings.warn("Image %s does not meet the above criteria." % filename, AstropyUserWarning) 
+             # end of loop over files
 	
-	    # Sort the lists by their WAVELNTH value
-	    images_with_headers_unsorted = zip(image_data, headers, filenames)
-	    images_with_headers = sorted(images_with_headers_unsorted, 
-	                                 key=lambda header: header[1]['WAVELNTH'])
+        # Sort the lists by their WAVELNTH value
+        images_with_headers_unsorted = zip(image_data, headers, filenames)
+        images_with_headers = sorted(images_with_headers_unsorted, 
+	                             key=lambda header: header[1]['WAVELNTH'])
 	
-	    if (do_conversion):
-	        convert_images(images_with_headers)
+        if (do_conversion):
+            convert_images(images_with_headers)
 	
-	    if (do_registration):
-	        register_images(images_with_headers)
+        if (do_registration):
+            register_images(images_with_headers)
 	
-	    if (do_convolution):
-	        convolve_images(images_with_headers)
+        if (do_convolution):
+            convolve_images(images_with_headers)
 	
-	    if (do_resampling):
-	        resample_images(images_with_headers, logfile_name)
+        if (do_resampling):
+            resample_images(images_with_headers, logfile_name)
 	
-	    if (do_seds):
-	        output_seds(images_with_headers)
-                
-            # all done!
-            log.info('All tasks completed.')
-	    if __name__ == '__main__':
-	        sys.exit()
-	    else:
-	        return
+        if (do_seds):
+            output_seds(images_with_headers)
+            
+        # all done!
+        log.info('All tasks completed.')
+        if __name__ == '__main__':
+	    sys.exit()
+        else:
+	    return
