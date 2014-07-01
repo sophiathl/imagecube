@@ -19,6 +19,7 @@ import math
 import os
 import warnings
 import shutil
+import string
 
 from datetime import datetime
 from astropy import units as u
@@ -69,7 +70,7 @@ NUV_LAMBDA_CON = 2.06 * 10**(-16)
 """
 Code constant: NUV_LAMBDA_CON
 
-Calibration from CPS to Flux in [erg sec-1 cm-2 AA-1], as given in GALEX
+calibration from CPS to Flux in [erg sec-1 cm-2 AA-1], as given in GALEX
 for the NUV filter.
 http://galexgi.gsfc.nasa.gov/docs/galex/FAQ/counts_background.html
 
@@ -248,7 +249,7 @@ of your input images and try again.
     """)
 
 
-def parse_command_line():
+def parse_command_line(args):
     """
     Parses the command line to obtain parameters.
 
@@ -269,26 +270,30 @@ def parse_command_line():
     global rot_angle
 
 ##TODO: switch over to argparse
+    parse_status = 0
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "", ["dir=", "ang_size=",
+        opts, args = getopt.getopt(args, "", ["dir=", "ang_size=",
                                    "flux_conv", "im_conv", "im_reg", "im_ref=",
                                    "rot_angle=", "im_conv", "fwhm=", "kernels=", 
                                    "im_pixsc=","im_regrid", "seds", "cleanup", "help"])
     except getopt.GetoptError, exc:
         print(exc.msg)
         print("An error occurred. Check your parameters and try again.")
-        sys.exit(2)
+        parse_status = 2
+        return(parse_status)
     for opt, arg in opts:
         if opt in ("--help"):
             print_usage()
-            sys.exit()
+            parse_status = 1
+            return(parse_status)
         elif opt in ("--ang_size"):
             ang_size = float(arg)
         elif opt in ("--dir"):
             image_directory = arg
             if (not os.path.isdir(image_directory)):
                 print("Error: The directory cannot be found: " + image_directory)
-                sys.exit()
+                parse_status = 2
+                return(parse_status)
         elif opt in ("--flux_conv"):
             do_conversion = True
         elif opt in ("--im_reg"):
@@ -312,7 +317,8 @@ def parse_command_line():
             if (not os.path.isdir(kernel_directory)):
                 print("Error: The directory cannot be found: " + 
                       kernel_directory)
-                sys.exit()
+                parse_status=2
+                return
         elif opt in ("--im_pixsc"):
             im_pixsc = float(arg)
 
@@ -323,8 +329,8 @@ def parse_command_line():
             print("The file " + main_reference_image + 
                   " could not be found in the directory " + image_directory +
                   ". Cannot run without reference image, exiting.")
-            sys.exit()
-    return
+            parse_status = 2
+    return(parse_status)
 
 def get_conversion_factor(header, instrument):
     """
@@ -437,7 +443,6 @@ def convert_images(images_with_headers):
                 conversion_factor = 1.0
 
         # Some manipulation of filenames and directories
-        # NOTETOSELF: repeated code
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
         converted_filename = (new_directory + original_filename  + 
@@ -469,10 +474,11 @@ def get_pixel_scale(header):
     '''
     w = wcs.WCS(header)
 
-    cdelt = np.matrix(w.wcs.get_cdelt())
-    pc = np.matrix(w.wcs.get_pc())
-    scale = np.array(cdelt * pc)[0,:]
-    pix_scale = abs(scale[0]) * u.deg.to(u.arcsec)
+    if w.wcs.has_cd(): # get_cdelt is supposed to work whether header has CDij, PC, or CDELT
+        pc = np.matrix(w.wcs.get_pc())
+        pix_scale =  math.sqrt(pc[0,0]**2+pc[0,1]**2) * u.deg.to(u.arcsec)
+    else: #       but don't think it does
+        pix_scale = abs(w.wcs.get_cdelt()[0]) * u.deg.to(u.arcsec)
     return(pix_scale)
 
 def get_pangle(header):
@@ -486,15 +492,10 @@ def get_pangle(header):
 
 
     '''
-    try:
-        if 'CROTA2' in header.keys(): # use the CROTA2 kw if present
-            return(float(header['CROTA2']))
-        else: # otherwise use the CD matrix
-            cr2 = math.atan2(header['CD1_2'],header['CD2_2'])*u.radian.to(u.deg)
-            return(cr2) 
-    except KeyError:
-        warnings.warn('No PA information found!')
-        return(0.0)
+    w = wcs.WCS(header)
+    pc = w.wcs.get_pc()
+    cr2 = math.atan2(pc[0,1],pc[0,0])*u.radian.to(u.deg)    
+    return(cr2)
 
 def merge_headers(montage_hfile, orig_header, out_file):
     '''
@@ -541,7 +542,7 @@ def get_ref_wcs(img_name):
     try:
         rotation_pa = rot_angle # the user-input PA
     except NameError: # user didn't define it
-        log.info('Getting position angle from %s' % main_reference_image)
+        log.info('Getting position angle from %s' % img_name)
         rotation_pa = get_pangle(hdr)
     log.info('Using PA of %.1f degrees' % rotation_pa)
     hdulist.close()
@@ -595,7 +596,6 @@ def register_images(images_with_headers):
     width_and_height = u.arcsec.to(u.deg, ang_size)
 
     # now loop over all the images
-    # NOTETOSELF: repeated code
     for i in range(0, len(images_with_headers)):
 
         native_pixelscale = get_pixel_scale(images_with_headers[i][1])
@@ -642,7 +642,6 @@ def convolve_images(images_with_headers):
         os.makedirs(new_directory)
 
     for i in range(0, len(images_with_headers)):
-        # NOTETOSELF: repeated code
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
         convolved_filename = (new_directory + original_filename  + 
@@ -684,6 +683,9 @@ def convolve_images(images_with_headers):
             # in the header no longer means that there is any data in 
             # hdulist[1].data. I am using a workaround for now, but this needs
             # to be looked at.
+            # NOTE_FROM_PB: can possibly solve this issue, and eliminate a lot 
+            # of repetitive code, by making a multi-extension FITS file
+            # in the initial step, and iterating over the extensions in that file
             hdulist = fits.open(input_filename)
             header = hdulist[0].header
             image_data = hdulist[0].data
@@ -719,7 +721,7 @@ def resample_images(images_with_headers, logfile_name):
         os.makedirs(new_directory)
 
     # figure out the geometry of the resampled images
-    width_input = ang_size / (im_pixsc) 
+    width_input = ang_size / im_pixsc
     height_input = width_input
 
     # get WCS info for the reference image
@@ -729,9 +731,8 @@ def resample_images(images_with_headers, logfile_name):
     montage.commands.mHdr(`lngref_input` + ' ' + `latref_input`, width_input, 
                           'grid_final_resample_header', system='eq', 
                           equinox=2000.0, height=height_input, 
-                          pix_size=im_pixsc, rotation=0.)
+                          pix_size=im_pixsc, rotation=rotation_pa)
 
-    # NOTETOSELF: repeated code
     for i in range(0, len(images_with_headers)):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
@@ -750,11 +751,11 @@ def resample_images(images_with_headers, logfile_name):
         # delete the header file
         os.unlink(artificial_header)
 
-    create_data_cube(images_with_headers, logfile_name, 'grid_final_resample_header')
     os.unlink('grid_final_resample_header')
+    create_data_cube(images_with_headers, logfile_name)
     return
 
-def create_data_cube(images_with_headers, logfile_name, header_text):
+def create_data_cube(images_with_headers, logfile_name):
     """
     Creates a data cube from the provided images.
 
@@ -770,26 +771,8 @@ def create_data_cube(images_with_headers, logfile_name, header_text):
     if not os.path.exists(new_directory):
         os.makedirs(new_directory)
 
-    # make a new header
-    prihdr = fits.Header()
-    # put some information in it
-    prihdr['CREATOR'] = 'IMAGECUBE'
-    prihdr['DATE'] = datetime.now().strftime('%Y-%m-%d')
-    prihdr['LOGFILE'] = logfile_name 
-    if do_conversion:
-        prihdr['BUNIT'] = ('Jy/pixel', 'Units of image data')
-    # add the WCS info from the regridding stage
-    # TODO: deal with case where this hasn't been done
-    wcs_header = fits.Header.fromtextfile(header_text)
-    for key in wcs_header.keys():
-        if key not in prihdr.keys():
-            prihdr[key] = wcs_header[key] 
-    
-    # now use this header to create a new fits file
-    prihdu = fits.PrimaryHDU(header=prihdr)
-    cube_hdulist = fits.HDUList([prihdu])
-
-    # NOTETOSELF: repeated code
+    # put the image data into a list (not sure this is quite the right way to do it)
+    resampled_images=[]
     for i in range(0, len(images_with_headers)):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
@@ -797,10 +780,27 @@ def create_data_cube(images_with_headers, logfile_name, header_text):
                               original_filename  + "_resampled.fits")
         
         hdulist = fits.open(resampled_filename)
-        cube_hdulist.append(hdulist[0])
+        image = hdulist[0].data
+        resampled_images.append(image)
+        if i == 0:     # grab the WCS info from the first input image
+            new_wcs = wcs.WCS(hdulist[0].header)
         hdulist.close()
 
-    cube_hdulist.writeto(new_directory + '/' + 'datacube.fits',clobber=True)
+    # make a new header with the WCS info
+    prihdr = new_wcs.to_header()
+    # put some other information in the header
+    prihdr['CREATOR'] = ('IMAGECUBE', 'Software used to create this file') # TODO: add version
+    prihdr['DATE'] = (datetime.now().strftime('%Y-%m-%d'), 'File creation date')
+    prihdr['LOGFILE'] = (logfile_name, 'imagecube log file') 
+    if do_conversion:
+        prihdr['BUNIT'] = ('Jy/pixel', 'Units of image data')
+
+    # now use the header and data to create a new fits file
+    prihdu = fits.PrimaryHDU(header=prihdr, data=resampled_images)
+    hdulist = fits.HDUList([prihdu])
+    hdulist[0].add_datasum(when='Computed by imagecube')
+    hdulist[0].add_checksum(when='Computed by imagecube',override_datasum=True)
+    hdulist.writeto(new_directory + '/' + 'datacube.fits',clobber=True)
     return
 
 
@@ -825,7 +825,6 @@ def output_seds(images_with_headers):
 
     num_wavelengths = len(images_with_headers)
 
-    # NOTETOSELF: repeated code
     for i in range(0, num_wavelengths):
         original_filename = os.path.basename(images_with_headers[i][2])
         original_directory = os.path.dirname(images_with_headers[i][2])
@@ -896,7 +895,7 @@ def cleanup_output_files():
         if (os.path.isdir(subdir)):
             log.info("Removing " + subdir)
             shutil.rmtree(subdir)
-
+    return
 
 #if __name__ == '__main__':
 def main(args=None):
@@ -926,26 +925,27 @@ def main(args=None):
     kernel_directory = ''
     im_pixsc = ''
 
-    parse_command_line()
+    # note start time for log
     start_time = datetime.now()
 
-    if (do_cleanup):
+    # parse arguments
+    if args !=None:
+        arglist = string.split(args)
+    else:
+        arglist = sys.argv[1:]
+    parse_status = parse_command_line(arglist) 
+    if parse_status > 0:
+        if __name__ == '__main__':
+            sys.exit()
+        else:
+            return
+
+    if (do_cleanup): # cleanup and exit
         cleanup_output_files()
-        sys.exit()
-
-    # if not just cleaning up, make a log file which records input parameters
-    logfile_name = 'imagecube_'+ start_time.strftime('%Y-%m-%d_%H%M%S') + '.log'
-    logf = open(logfile_name, 'w')
-    logf.write(start_time.strftime('%Y-%m-%d_%H%M%S'))
-    logf.write(': imagecube called with arguments %s' % sys.argv[1:])
-    logf.close()
-
-    # Grab all of the .fits and .fit files in the specified directory
-    all_files = glob.glob(image_directory + "/*.fit*")
-    # no use doing anything if there aren't any files!
-    if len(all_files) == 0:
-        warnings.warn('No fits found in directory' % image_directory, AstropyUserWarning )
-        sys.exit()
+        if __name__ == '__main__':
+            sys.exit()
+        else:
+            return
 
     # Lists to store information
     global image_data
@@ -963,53 +963,76 @@ def main(args=None):
     headers = []
     filenames = []
 
-    for (i,fitsfile) in enumerate(all_files):
-        hdulist = fits.open(fitsfile)
-        img_extens = find_image_planes(hdulist)
-        # NOTETOSELF: right now we are just using the *first* image extension in a file
-        #             which is not what we want to do, ultimately.
-        header = hdulist[img_extens[0]].header
-        image = hdulist[img_extens[0]].data
-        # Strip the .fit or .fits extension from the filename so we can append
-        # things to it later on
-        filename = os.path.splitext(hdulist.filename())[0]
-        hdulist.close()
-        # check to see if image has reasonable scale & orientation
-        # NOTETOSELF: should this really be here? It's not relevant for just flux conversion.
-        #             want separate loop over image planes, after finishing file loop
-        pixelscale = get_pixel_scale(header)
-        fov = pixelscale * float(header['NAXIS1'])
-        log.info("Checking %s: is pixel scale (%.2f\") < ang_size (%.2f\") < FOV (%.2f\") ?"% (fitsfile,pixelscale, ang_size,fov))
-        if (pixelscale < ang_size < fov):
-            try:
-                wavelength = header['WAVELNTH'] 
-                header['WAVELNTH'] = (wavelength, 'micron') # SOPHIA: why are we reading the keyword then setting it?
-                image_data.append(image)
-                headers.append(header)
-                filenames.append(filename)
-            except KeyError:
-                warnings.warn('Image %s has no WAVELNTH keyword, will not be used' % filename, AstropyUserWarning)
+    # if not just cleaning up, make a log file which records input parameters
+    logfile_name = 'imagecube_'+ start_time.strftime('%Y-%m-%d_%H%M%S') + '.log'
+    with log.log_to_file(logfile_name,filter_origin='imagecube.imagecube'):
+    	log.info('imagecube started at %s' % start_time.strftime('%Y-%m-%d_%H%M%S'))
+    	log.info('imagecube called with arguments %s' % arglist)
+
+	# Grab all of the .fits and .fit files in the specified directory
+        all_files = glob.glob(image_directory + "/*.fit*")
+        # no use doing anything if there aren't any files!
+        if len(all_files) == 0:
+            warnings.warn('No fits files found in directory %s' % image_directory, AstropyUserWarning )
+            if __name__ == '__main__':
+                sys.exit()
+            else:
+                return
+	
+        # get images
+        for (i,fitsfile) in enumerate(all_files):
+	     hdulist = fits.open(fitsfile)
+	     img_extens = find_image_planes(hdulist)
+	     # NOTETOSELF: right now we are just using the *first* image extension in a file
+	     #             which is not what we want to do, ultimately.
+	     header = hdulist[img_extens[0]].header
+	     image = hdulist[img_extens[0]].data
+	     # Strip the .fit or .fits extension from the filename so we can append
+	     # things to it later on
+	     filename = os.path.splitext(hdulist.filename())[0]
+	     hdulist.close()
+	     # check to see if image has reasonable scale & orientation
+	     # NOTETOSELF: should this really be here? It's not relevant for just flux conversion.
+	     #             want separate loop over image planes, after finishing file loop
+	     pixelscale = get_pixel_scale(header)
+	     fov = pixelscale * float(header['NAXIS1'])
+	     log.info("Checking %s: is pixel scale (%.2f\") < ang_size (%.2f\") < FOV (%.2f\") ?"% (fitsfile,pixelscale, ang_size,fov))
+	     if (pixelscale < ang_size < fov):
+	         try:
+	             wavelength = header['WAVELNTH'] 
+	             header['WAVELNTH'] = (wavelength, 'micron') # add the unit if it's not already there
+	             image_data.append(image)
+	             headers.append(header)
+	             filenames.append(filename)
+	         except KeyError:
+	             warnings.warn('Image %s has no WAVELNTH keyword, will not be used' % filename, AstropyUserWarning)
+	     else:
+	         warnings.warn("Image %s does not meet the above criteria." % filename, AstropyUserWarning) 
+             # end of loop over files
+	
+        # Sort the lists by their WAVELNTH value
+        images_with_headers_unsorted = zip(image_data, headers, filenames)
+        images_with_headers = sorted(images_with_headers_unsorted, 
+	                             key=lambda header: header[1]['WAVELNTH'])
+	
+        if (do_conversion):
+            convert_images(images_with_headers)
+	
+        if (do_registration):
+            register_images(images_with_headers)
+	
+        if (do_convolution):
+            convolve_images(images_with_headers)
+	
+        if (do_resampling):
+            resample_images(images_with_headers, logfile_name)
+	
+        if (do_seds):
+            output_seds(images_with_headers)
+            
+        # all done!
+        log.info('All tasks completed.')
+        if __name__ == '__main__':
+	    sys.exit()
         else:
-            warnings.warn("Image %s does not meet the above criteria." % filename, AstropyUserWarning) 
-
-    # Sort the lists by their WAVELNTH value
-    images_with_headers_unsorted = zip(image_data, headers, filenames)
-    images_with_headers = sorted(images_with_headers_unsorted, 
-                                 key=lambda header: header[1]['WAVELNTH'])
-
-    if (do_conversion):
-        convert_images(images_with_headers)
-
-    if (do_registration):
-        register_images(images_with_headers)
-
-    if (do_convolution):
-        convolve_images(images_with_headers)
-
-    if (do_resampling):
-        resample_images(images_with_headers, logfile_name)
-
-    if (do_seds):
-        output_seds(images_with_headers)
-
-    sys.exit()
+	    return
